@@ -2823,6 +2823,36 @@ async def _get_or_resolve_thread_github_token(thread_id: str, email: str) -> str
     return github_token
 
 
+async def _org_member_allowed(login: str) -> bool:
+    """Allow any active member of an allowed GitHub org to trigger (bot-token mode).
+
+    Patched in: replaces the strict per-user mapping requirement with an
+    org-membership check, so anyone in ALLOWED_GITHUB_ORGS can run tasks.
+    """
+    login = (login or "").strip()
+    if not login or not ALLOWED_GITHUB_ORGS:
+        return False
+    token = await get_github_app_installation_token()
+    if not token:
+        return False
+    for org in ALLOWED_GITHUB_ORGS:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.github.com/orgs/" + org + "/memberships/" + login,
+                    headers={
+                        "Authorization": "Bearer " + token,
+                        "Accept": "application/vnd.github+json",
+                        "X-GitHub-Api-Version": "2022-11-28",
+                    },
+                )
+            if resp.status_code == 200 and resp.json().get("state") == "active":
+                return True
+        except Exception:
+            logger.exception("Org membership check failed for %s in %s", login, org)
+    return False
+
+
 async def process_github_pr_comment(payload: dict[str, Any], event_type: str) -> None:
     """Process a GitHub PR comment that tagged @open-swe.
 
@@ -2881,8 +2911,11 @@ async def process_github_pr_comment(payload: dict[str, Any], event_type: str) ->
     email = await email_for_login(github_login) or ""
     if email:
         github_token = await _get_or_resolve_thread_github_token(thread_id, email)
+    elif await _org_member_allowed(github_login):
+        github_token = await get_github_app_installation_token()
+        logger.info("Unmapped org member '%s' allowed (bot-token mode)", github_login)
     else:
-        logger.warning("No email mapping for GitHub user '%s', skipping", github_login)
+        logger.warning("No email mapping and not an allowed org member '%s', skipping", github_login)
         return
 
     if not github_token:
@@ -3155,8 +3188,12 @@ async def process_github_issue(payload: dict[str, Any], event_type: str) -> None
 
     email = await email_for_login(github_login) or ""
     if not email:
-        logger.warning("No email mapping for GitHub user '%s', skipping", github_login)
-        return
+        if await _org_member_allowed(github_login):
+            email = github_login + "@users.noreply.github.com"
+            logger.info("Unmapped org member '%s' allowed (bot-token mode)", github_login)
+        else:
+            logger.warning("No email mapping and not an allowed org member '%s', skipping", github_login)
+            return
 
     thread_id = generate_thread_id_from_github_issue(issue_id)
     existing_thread = await _thread_exists(thread_id)
