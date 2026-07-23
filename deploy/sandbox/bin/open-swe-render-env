@@ -1,0 +1,40 @@
+#!/bin/bash
+# Render /opt/open-swe/.env from Secrets Manager (source of truth) + Langfuse env.
+set -euo pipefail
+SECRET_ID=agent-sandbox/open-swe
+REGION=eu-central-1
+J=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ID" --region "$REGION" --query SecretString --output text)
+get(){ printf '%s' "$J" | jq -r --arg k "$1" '.[$k] // ""'; }
+LF_HOST=""; LF_PUB=""; LF_SEC=""
+if [ -r /etc/agent-sandbox/langfuse.env ]; then . /etc/agent-sandbox/langfuse.env; LF_HOST="${LANGFUSE_HOST:-}"; LF_PUB="${LANGFUSE_PUBLIC_KEY:-}"; LF_SEC="${LANGFUSE_SECRET_KEY:-}"; fi
+umask 077
+TMP=$(mktemp)
+{
+  echo "# Rendered from Secrets Manager ($SECRET_ID) at service start. Do not edit by hand."
+  echo "# --- Model (TensorX / OpenAI-compatible by default) ---"
+  echo "LLM_MODEL_ID=$(get LLM_MODEL_ID)"
+  echo "OPENAI_API_KEY=$(get OPENAI_API_KEY)"
+  echo "OPENAI_BASE_URL=$(get OPENAI_BASE_URL)"
+  echo "ANTHROPIC_API_KEY=$(get ANTHROPIC_API_KEY)"
+  echo "LANGSMITH_API_KEY_PROD=bot-token-only-mode"
+  echo "# --- Sandbox + scope ---"
+  echo "SANDBOX_TYPE=local"
+  echo "LOCAL_SANDBOX_ROOT_DIR=/srv/agent-workspace"
+  echo "GIT_TERMINAL_PROMPT=0"
+  echo "ALLOWED_GITHUB_ORGS=dinolabdev"
+  echo "# --- GitHub App ---"
+  echo "GITHUB_APP_ID=$(get GITHUB_APP_ID)"
+  echo "GITHUB_APP_CLIENT_ID=$(get GITHUB_APP_CLIENT_ID)"
+  echo "GITHUB_APP_CLIENT_SECRET=$(get GITHUB_APP_CLIENT_SECRET)"
+  echo "GITHUB_WEBHOOK_SECRET=$(get GITHUB_WEBHOOK_SECRET)"
+  echo "GITHUB_APP_INSTALLATION_ID=$(get GITHUB_APP_INSTALLATION_ID)"
+  echo "# --- Langfuse tracing ---"
+  echo "LANGFUSE_HOST=$LF_HOST"
+  echo "LANGFUSE_PUBLIC_KEY=$LF_PUB"
+  echo "LANGFUSE_SECRET_KEY=$LF_SEC"
+  PEM_B64=$(get GITHUB_APP_PRIVATE_KEY_B64)
+  if [ -n "$PEM_B64" ]; then printf 'GITHUB_APP_PRIVATE_KEY="'; printf '%s' "$PEM_B64" | base64 -d; printf '"\n'; else echo 'GITHUB_APP_PRIVATE_KEY='; fi
+} > "$TMP"
+install -o ec2-user -g ec2-user -m 600 "$TMP" /opt/open-swe/.env
+rm -f "$TMP"
+echo "rendered /opt/open-swe/.env"

@@ -1,0 +1,30 @@
+#!/bin/bash
+# Mint a GitHub App installation token (cached ~40min). Reads creds from /opt/open-swe/.env.
+set -euo pipefail
+CACHE_DIR=/var/tmp/agent-gh
+CACHE="$CACHE_DIR/token"
+mkdir -p "$CACHE_DIR" 2>/dev/null || true
+if [ -f "$CACHE" ] && [ -s "$CACHE" ]; then
+  age=$(( $(date +%s) - $(stat -c %Y "$CACHE" 2>/dev/null || echo 0) ))
+  if [ "$age" -lt 2400 ]; then cat "$CACHE"; exit 0; fi
+fi
+set -a; . /opt/open-swe/.env; set +a
+: "${GITHUB_APP_ID:?}"; : "${GITHUB_APP_INSTALLATION_ID:?}"; : "${GITHUB_APP_PRIVATE_KEY:?}"
+KEYFILE=$(mktemp); trap 'rm -f "$KEYFILE"' EXIT
+printf '%s' "$GITHUB_APP_PRIVATE_KEY" | sed 's/\\n/\n/g' > "$KEYFILE"
+b64url(){ openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+now=$(date +%s)
+header=$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | b64url)
+payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now-60))" "$((now+540))" "$GITHUB_APP_ID" | b64url)
+unsigned="$header.$payload"
+sig=$(printf '%s' "$unsigned" | openssl dgst -sha256 -sign "$KEYFILE" -binary | b64url)
+jwt="$unsigned.$sig"
+resp=$(curl -fsS -X POST \
+  -H "Authorization: Bearer $jwt" \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "https://api.github.com/app/installations/$GITHUB_APP_INSTALLATION_ID/access_tokens")
+token=$(printf '%s' "$resp" | jq -r '.token // empty')
+[ -n "$token" ] || { echo "agent-gh-token: mint failed" >&2; exit 1; }
+umask 077; printf '%s' "$token" > "$CACHE"
+printf '%s' "$token"

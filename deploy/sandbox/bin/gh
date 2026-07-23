@@ -1,0 +1,6 @@
+#!/bin/bash
+# Local-sandbox proxy shim: inject a real GitHub App installation token,
+# overriding the GH_TOKEN=dummy the agent is prompted to pass.
+_t="$(/usr/local/bin/agent-gh-token 2>/dev/null)"
+if [ -n "$_t" ]; then export GH_TOKEN="$_t"; export GITHUB_TOKEN="$_t"; fi
+exec /usr/bin/gh "$@"
