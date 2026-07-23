@@ -22,6 +22,7 @@ from langgraph_sdk.client import LangGraphClient
 
 from .ci_autofix import handle_ci_failure, handle_review_feedback
 from .connector_routes import router as connector_router
+from .teams_adapter import router as teams_router
 from .dashboard import router as dashboard_router
 from .dashboard.agent_overrides import (
     get_profile_default_repo,
@@ -160,6 +161,7 @@ if DASHBOARD_ALLOWED_ORIGINS:
 
 app.include_router(dashboard_router)
 app.include_router(connector_router)
+app.include_router(teams_router)
 
 LINEAR_WEBHOOK_SECRET = os.environ.get("LINEAR_WEBHOOK_SECRET", "")
 GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "")

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "${TEAMS_APP_ID}",
+  "developer": {
+    "name": "loupfeed",
+    "websiteUrl": "https://github.com/gilons/loupfeed-agents",
+    "privacyUrl": "https://github.com/gilons/loupfeed-agents",
+    "termsOfUseUrl": "https://github.com/gilons/loupfeed-agents"
+  },
+  "name": {
+    "short": "loupfeed",
+    "full": "loupfeed agents"
+  },
+  "description": {
+    "short": "Your team's PM agent \u2014 ask and act on your planning system.",
+    "full": "Mention @loupfeed in chats, channels, and meeting chats to ask questions and take actions in your planning system (Jira, Confluence, and other connected tools), triage ideas from discussions and call transcripts, and keep planning threads moving."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#4F46E5",
+  "bots": [
+    {
+      "botId": "${TEAMS_APP_ID}",
+      "scopes": [
+        "personal",
+        "team",
+        "groupChat"
+      ],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "validDomains": [
+    "d3mlm0z8iw9b1o.cloudfront.net"
+  ]
+}
