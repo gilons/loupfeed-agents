@@ -47,6 +47,7 @@ from .server import (
 )
 from .tools import (
     fetch_url,
+    github_api,
     http_request,
     read_repo_file,
     search_repo_code,
@@ -80,6 +81,10 @@ schemas come from the connector — read them.
 
 Connector state right now:
 {connector_status}
+- `github_api` — read-only GitHub REST access **authenticated as the org's GitHub App** \
+(sees private repos, org membership, issues, PRs, commits). For ANY GitHub question — \
+membership, usernames, repos, activity — use this tool; never guess or web-search GitHub \
+facts.
 - `web_search`, `fetch_url`, `http_request` — external docs and APIs.
 - `read_repo_file`, `search_repo_code` — read-only access to the thread's bound GitHub \
 repository, when one is configured for this thread.
@@ -202,6 +207,7 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
         system_prompt=system_prompt,
         tools=[
             *connector_tools,
+            github_api,
             web_search,
             fetch_url,
             http_request,
