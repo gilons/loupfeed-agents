@@ -1,12 +1,12 @@
 
 # Installation Guide
 
-This guide walks you through setting up Open SWE end-to-end: local development, GitHub App creation, LangSmith configuration, webhooks, the web dashboard, and production deployment.
+This guide walks you through setting up loupfeed agents end-to-end: local development, GitHub App creation, LangSmith configuration, webhooks, the web dashboard, and production deployment.
 
-Open SWE has two runnable pieces:
+loupfeed agents has two runnable pieces:
 
 - **The backend** — a LangGraph app (three graphs: `agent`, `reviewer`, `analyzer`) plus a FastAPI app (`agent.webapp:app`) that owns the webhooks and the dashboard API. Both are served together by `langgraph dev`.
-- **The dashboard** — a TanStack Start + Vite web app in `ui/` (package name `open-swe-dashboard`). It's a thin client over the FastAPI dashboard API (`/dashboard/api/*`): GitHub-login, per-user model/profile settings, team defaults, enabled-repo and review-style management, user mappings, and the Agents chat UI. It's optional for pure webhook-driven use, but recommended.
+- **The dashboard** — a TanStack Start + Vite web app in `ui/` (package name `loupfeed-agents-dashboard`). It's a thin client over the FastAPI dashboard API (`/dashboard/api/*`): GitHub-login, per-user model/profile settings, team defaults, enabled-repo and review-style management, user mappings, and the Agents chat UI. It's optional for pure webhook-driven use, but recommended.
 
 > **The steps are ordered to avoid forward references.** Each step only depends on things you've already completed.
 
@@ -21,8 +21,8 @@ Open SWE has two runnable pieces:
 ## 1. Clone and install
 
 ```bash
-git clone https://github.com/langchain-ai/open-swe.git
-cd open-swe
+git clone https://github.com/gilons/loupfeed-agents.git
+cd loupfeed-agents
 uv venv
 source .venv/bin/activate
 uv sync --all-extras
@@ -44,7 +44,7 @@ Copy the HTTPS URL you set, or if you didn't pass `--url`, the one ngrok gives y
 
 ## 3. Create a GitHub App
 
-Open SWE authenticates as a [GitHub App](https://docs.github.com/en/apps/creating-github-apps) to clone repos, push branches, and open PRs.
+loupfeed agents authenticates as a [GitHub App](https://docs.github.com/en/apps/creating-github-apps) to clone repos, push branches, and open PRs.
 
 ### 3a. Choose your OAuth provider ID
 
@@ -60,8 +60,8 @@ Write this down. You'll use it in the callback URL below and again in step 4 whe
 
 1. Go to **GitHub Settings → Developer settings → [GitHub Apps](https://github.com/settings/apps) → [New GitHub App](https://github.com/settings/apps/new)**
 2. Fill in:
-   - **App name**: `open-swe` (or your preferred name)
-   - **Homepage URL**: This can be any valid URL — it's only shown on the GitHub Marketplace page (which you won't be using). Use something like `https://github.com/langchain-ai/open-swe`
+   - **App name**: `loupfeed-agents` (or your preferred name)
+   - **Homepage URL**: This can be any valid URL — it's only shown on the GitHub Marketplace page (which you won't be using). Use something like `https://github.com/gilons/loupfeed-agents`
    - **Callback URL**: GitHub Apps allow multiple callback URLs (one per line). Add **both**:
      1. `https://smith.langchain.com/host-oauth-callback/<your-provider-id>` — replace `<your-provider-id>` with the ID you chose in step 3a (e.g. `https://smith.langchain.com/host-oauth-callback/your-org-github-oauth`). This is the **agent-runtime** OAuth callback, brokered by LangSmith (step 4b).
      2. `http://localhost:2024/dashboard/api/auth/callback` — the **dashboard-login** OAuth callback (step 8). For production, also add `https://<your-dashboard-api-url>/dashboard/api/auth/callback`. This is a separate, direct GitHub OAuth flow (not via LangSmith), so it needs its own callback URL.
@@ -76,7 +76,7 @@ Write this down. You'll use it in the callback URL below and again in step 4 whe
      - Contents: Read & write
      - Pull requests: Read & write
      - Issues: Read & write
-     - Checks: Read & write — reports an "Open SWE Review" check run on PRs while an auto-review runs, and reads third-party CI conclusions for the auto-fix flow (it watches failing checks on agent-authored PRs and pushes fixes). Without it, check-run creation fails (logged, best-effort) but reviews still work, and CI auto-fix is disabled.
+     - Checks: Read & write — reports an "loupfeed agents Review" check run on PRs while an auto-review runs, and reads third-party CI conclusions for the auto-fix flow (it watches failing checks on agent-authored PRs and pushes fixes). Without it, check-run creation fails (logged, best-effort) but reviews still work, and CI auto-fix is disabled.
      - Commit statuses: Read-only — only needed if you enable the `Status` event below; the CI auto-fix flow reads the legacy combined commit-status API for integrations that report via statuses instead of check runs. Without it, status-based CI is silently ignored (logged as "Failed to read combined status").
      - Metadata: Read-only
    - **Organization permissions** (required only if you plan to set `ALLOWED_GITHUB_ORGS` — see step 5 / Security):
@@ -106,7 +106,7 @@ After creating the app:
 
 1. From your app's settings page, click **Install App** in the sidebar
 2. Select your org or personal account
-3. Choose which repositories Open SWE should have access to
+3. Choose which repositories loupfeed agents should have access to
 4. Click **Install**
 5. After installation, look at the URL in your browser — it will look like:
    ```
@@ -122,7 +122,7 @@ After creating the app:
 
 ## 4. Set up LangSmith
 
-Open SWE uses [LangSmith](https://smith.langchain.com/) for:
+loupfeed agents uses [LangSmith](https://smith.langchain.com/) for:
 - **Tracing**: all agent runs are logged for debugging and observability
 - **Sandboxes**: each task runs in an isolated LangSmith cloud sandbox
 
@@ -134,7 +134,7 @@ Open SWE uses [LangSmith](https://smith.langchain.com/) for:
 4. Get your **Tenant ID**: Visit LangSmith, login, then copy the UUID in the URL. Example: if your URL is `https://smith.langchain.com/o/72184268-01ea-4d29-98cc-6cfcf0f2abb0/agents/chat` -> the tenant ID would be `72184268-01ea-4d29-98cc-6cfcf0f2abb0`. Save it as `LANGSMITH_TENANT_ID_PROD`.
 5. Get your **Project ID**: open your tracing project in LangSmith, then click on the **ID** button in the top left, directly next to the project name. Save it as `LANGSMITH_TRACING_PROJECT_ID_PROD`
 
-> **Note on per-graph tracing projects.** The graphs trace into separate projects by name — `open-swe-agent` (main agent) and `open-swe-review` (reviewer/analyzer). "View trace" links resolve the correct project ID from these names automatically (via the `LANGSMITH_API_KEY_PROD` client), so make sure projects with these names exist in your tenant. If a name can't be resolved, links fall back to `LANGSMITH_TRACING_PROJECT_ID_PROD`, so set it to whichever project you want links to point at by default.
+> **Note on per-graph tracing projects.** The graphs trace into separate projects by name — `loupfeed-agents` (main agent) and `loupfeed-agents-review` (reviewer/analyzer). "View trace" links resolve the correct project ID from these names automatically (via the `LANGSMITH_API_KEY_PROD` client), so make sure projects with these names exist in your tenant. If a name can't be resolved, links fall back to `LANGSMITH_TRACING_PROJECT_ID_PROD`, so set it to whichever project you want links to point at by default.
 
 ### 4b. Configure GitHub OAuth (optional but recommended)
 
@@ -155,7 +155,7 @@ To set up per-user OAuth:
 
 ### 4c. Sandbox snapshots
 
-LangSmith sandboxes provide the isolated execution environment for each agent run. Open SWE boots each sandbox from a pre-built **snapshot** — you build the snapshot once (from a Docker image) and then reference it by UUID.
+LangSmith sandboxes provide the isolated execution environment for each agent run. loupfeed agents boots each sandbox from a pre-built **snapshot** — you build the snapshot once (from a Docker image) and then reference it by UUID.
 
 (Optional) Build and Push a custom Docker Image to Docker hub
 First build and push the sandbox Docker image to a registry LangSmith can pull from. On Apple Silicon, force `linux/amd64`
@@ -183,7 +183,7 @@ from langsmith.sandbox import SandboxClient
 
 client = SandboxClient(api_key="<your key>")
 snapshot = client.create_snapshot(
-    name="open-swe",
+    name="loupfeed-agents",
     docker_image="johanneslangchain/open-swe-sandbox:gh-cli-amd64",  # built from ./Dockerfile
     fs_capacity_bytes=32 * 1024**3,
 )
@@ -194,7 +194,7 @@ You can also use the helper script:
 
 ```bash
 uv run python scripts/create_sandbox_snapshot.py \
-  --name open-swe-gh-cli-amd64 \
+  --name loupfeed-agents-gh-cli-amd64 \
   --image johanneslangchain/open-swe-sandbox:gh-cli-amd64
 ```
 
@@ -214,23 +214,23 @@ DEFAULT_SANDBOX_IDLE_TTL_SECONDS="600"
 DEFAULT_SANDBOX_DELETE_AFTER_STOP_SECONDS="86400"
 ```
 
-`DEFAULT_SANDBOX_SNAPSHOT_ID` is required when `SANDBOX_TYPE=langsmith`. The server validates this at startup and refuses to boot if it's missing. The snapshot should include the GitHub CLI from the project Dockerfile; Open SWE authenticates `git` and `gh` through the LangSmith sandbox proxy using runtime-minted GitHub App installation tokens, not deployment-stored GitHub access tokens.
+`DEFAULT_SANDBOX_SNAPSHOT_ID` is required when `SANDBOX_TYPE=langsmith`. The server validates this at startup and refuses to boot if it's missing. The snapshot should include the GitHub CLI from the project Dockerfile; loupfeed agents authenticates `git` and `gh` through the LangSmith sandbox proxy using runtime-minted GitHub App installation tokens, not deployment-stored GitHub access tokens.
 
 ## 5. Set up triggers
 
-Open SWE can be triggered from GitHub, Linear, and/or Slack. **Configure whichever surfaces your team uses — you don't need all of them.**
+loupfeed agents can be triggered from GitHub, Linear, and/or Slack. **Configure whichever surfaces your team uses — you don't need all of them.**
 
 ### GitHub
 
 GitHub triggering works automatically once your GitHub App is set up (step 3). Users can:
-- Tag `@openswe` in issue titles or bodies to start a task
-- Tag `@openswe` in issue comments for follow-up instructions
-- Tag `@openswe` in PR review comments to have it address review feedback
+- Tag `@loupfeed` in issue titles or bodies to start a task
+- Tag `@loupfeed` in issue comments for follow-up instructions
+- Tag `@loupfeed` in PR review comments to have it address review feedback
 
 Which GitHub users can trigger the agent is controlled by the **user mapping** (GitHub login ⇄ work email ⇄ optional Slack ID), stored in the LangGraph Store rather than in code. Manage it in the dashboard under **Admin → User mappings**:
 
 - **Add / update** a single mapping (GitHub login + work email, plus an optional Slack user ID). The list is paged (20 per page).
-- Users can also **self-onboard**: when an unmapped person tags Open SWE in Slack, the agent runs with limited (GitHub App installation) permissions and posts a "link your GitHub account" prompt. Completing the org-gated GitHub OAuth login records a `self` mapping (carrying the originating Slack ID and work email). Self-signup is therefore bounded by the same `ALLOWED_GITHUB_ORGS` gate as dashboard login.
+- Users can also **self-onboard**: when an unmapped person tags loupfeed agents in Slack, the agent runs with limited (GitHub App installation) permissions and posts a "link your GitHub account" prompt. Completing the org-gated GitHub OAuth login records a `self` mapping (carrying the originating Slack ID and work email). Self-signup is therefore bounded by the same `ALLOWED_GITHUB_ORGS` gate as dashboard login.
 
 You should also configure which GitHub organizations and/or repositories the agent is allowed to operate on. You can specify allowed orgs, specific `owner/repo` pairs, or both:
 
@@ -250,13 +250,13 @@ A GitHub or Linear webhook is accepted if the resolved repo's org is in `ALLOWED
 
 ### Linear (optional)
 
-Open SWE listens for Linear comments that mention `@openswe`.
+loupfeed agents listens for Linear comments that mention `@loupfeed`.
 
 **Create a webhook:**
 
 1. In Linear, go to **Settings → API → Webhooks → New webhook**
 2. Fill in:
-   - **Label**: `open-swe`
+   - **Label**: `loupfeed-agents`
    - **URL**: `https://<your-ngrok-url>/webhooks/linear` — use the ngrok URL from step 2
    - **Secret**: generate with `openssl rand -hex 32` — save this as `LINEAR_WEBHOOK_SECRET`
 3. Under **Data change events**, enable **Comments → Create** only
@@ -265,12 +265,12 @@ Open SWE listens for Linear comments that mention `@openswe`.
 **Get your API key:**
 
 1. Go to **Settings → API → Personal API keys → New API key**
-2. Name it `open-swe`, select **All access**, and copy the key
+2. Name it `loupfeed-agents`, select **All access**, and copy the key
 3. Save it as `LINEAR_API_KEY`
 
 **Configure team-to-repo mapping:**
 
-Open SWE routes Linear issues to GitHub repos based on the Linear team and project. Edit the mapping in `agent/utils/linear_team_repo_map.py`:
+loupfeed agents routes Linear issues to GitHub repos based on the Linear team and project. Edit the mapping in `agent/utils/linear_team_repo_map.py`:
 
 ```python
 LINEAR_TEAM_TO_REPO = {
@@ -285,7 +285,7 @@ LINEAR_TEAM_TO_REPO = {
 }
 ```
 
-Users can also override the team/project mapping per-comment by including `repo:owner/name` (or a GitHub URL) in their `@openswe` comment. The mapping is used as a fallback when no repo is specified in the comment text.
+Users can also override the team/project mapping per-comment by including `repo:owner/name` (or a GitHub URL) in their `@loupfeed` comment. The mapping is used as a fallback when no repo is specified in the comment text.
 
 ### Slack (optional)
 
@@ -302,8 +302,8 @@ Users can also override the team/project mapping per-comment by including `repo:
 ```json
 {
     "display_information": {
-        "name": "Open SWE",
-        "description": "Enables Open SWE to interact with your workspace",
+        "name": "loupfeed agents",
+        "description": "Enables loupfeed agents to interact with your workspace",
         "background_color": "#000000"
     },
     "features": {
@@ -313,7 +313,7 @@ Users can also override the team/project mapping per-comment by including `repo:
             "messages_tab_read_only_enabled": false
         },
         "bot_user": {
-            "display_name": "Open SWE",
+            "display_name": "loupfeed agents",
             "always_online": true
         }
     },
@@ -368,7 +368,7 @@ Users can also override the team/project mapping per-comment by including `repo:
 
 **Slack URL checklist:**
 
-Both Slack URLs must point at the Open SWE backend that serves `agent.webapp:app` (locally, your ngrok URL forwarding to `langgraph dev`; in production, your LangGraph/FastAPI deployment URL), not the dashboard frontend URL.
+Both Slack URLs must point at the loupfeed agents backend that serves `agent.webapp:app` (locally, your ngrok URL forwarding to `langgraph dev`; in production, your LangGraph/FastAPI deployment URL), not the dashboard frontend URL.
 
 - **Event Subscriptions → Request URL:** `https://<your-backend-url>/webhooks/slack`
 - **Interactivity & Shortcuts → Interactivity Request URL:** `https://<your-backend-url>/webhooks/slack/interactivity`
@@ -380,7 +380,7 @@ Slack Block Kit option buttons only work when Interactivity is enabled and point
 - `SLACK_BOT_TOKEN`: the Bot User OAuth Token (`xoxb-...`)
 - `SLACK_SIGNING_SECRET`: found under **Basic Information → App Credentials**
 - `SLACK_BOT_USER_ID`: the bot's user ID (find it in Slack by clicking the bot's profile)
-- `SLACK_BOT_USERNAME`: the bot's display name (e.g. `open-swe`)
+- `SLACK_BOT_USERNAME`: the bot's display name (e.g. `loupfeed`)
 
 **Default repo:**
 
@@ -406,7 +406,7 @@ LANGSMITH_API_KEY_PROD=""              # From step 4a
 LANGCHAIN_TRACING_V2="true"
 LANGCHAIN_PROJECT=""                   # LangSmith project name for traces
 LANGSMITH_TENANT_ID_PROD=""           
-LANGSMITH_TRACING_PROJECT_ID_PROD=""   # Fallback project ID for "View trace" links; graphs trace into the open-swe-agent / open-swe-review projects by name
+LANGSMITH_TRACING_PROJECT_ID_PROD=""   # Fallback project ID for "View trace" links; graphs trace into the loupfeed-agents / loupfeed-agents-review projects by name
 LANGSMITH_URL_PROD="https://smith.langchain.com"                 
 
 # === LLM ===
@@ -500,7 +500,7 @@ EXA_API_KEY=""                         # From https://dashboard.exa.ai
 
 # === Reviewer / Analyzer (optional) ===
 # LangSmith dataset where reviewer finding outcomes are recorded and read back by
-# the analyzer. Defaults to "openswe-reviewer-outcomes" if unset.
+# the analyzer. Defaults to "loupfeed-reviewer-outcomes" if unset.
 REVIEWER_OUTCOMES_DATASET=""
 # Single GitHub org whose members may trigger the agent on *public* repos.
 # Empty => no public-repo gate (back-compat). Distinct from ALLOWED_GITHUB_ORGS.
@@ -596,7 +596,7 @@ Other UI scripts: `bun run build`, `bun run typecheck`, `bun run lint`, `bun run
 ### GitHub
 
 1. Go to any issue in a repository where the app is installed
-2. Create or comment on an issue with: `@openswe what files are in this repo?`
+2. Create or comment on an issue with: `@loupfeed what files are in this repo?`
 3. You should see:
    - A 👀 reaction on your comment within a few seconds
    - A new run in your LangSmith project
@@ -605,7 +605,7 @@ Other UI scripts: `bun run build`, `bun run typecheck`, `bun run lint`, `bun run
 ### Linear
 
 1. Go to any Linear issue in a team you configured in `LINEAR_TEAM_TO_REPO`
-2. Add a comment: `@openswe what files are in this repo?`
+2. Add a comment: `@loupfeed what files are in this repo?`
 3. You should see:
    - A 👀 reaction on your comment within a few seconds
    - A new run in your LangSmith project
@@ -614,7 +614,7 @@ Other UI scripts: `bun run build`, `bun run typecheck`, `bun run lint`, `bun run
 ### Slack
 
 1. In any channel where the bot is invited, start a thread
-2. Mention the bot: `@open-swe what's in the repo?`
+2. Mention the bot: `@loupfeed what's in the repo?`
 3. You should see a reply in the thread with the agent's response.
 
 ### Dashboard
@@ -691,8 +691,8 @@ Alternatively, you can run the dashboard as a direct cross-origin client: set `V
 
 ### Agent not responding to comments
 
-- For GitHub: ensure the comment or issue contains `@openswe` (case-insensitive), and the commenter has a user mapping (Admin → User mappings; see "Configure triggering surfaces"). Add any missing user with **Add / update** in that section.
-- For Linear: ensure the comment contains `@openswe` (case-insensitive)
+- For GitHub: ensure the comment or issue contains `@loupfeed` (case-insensitive), and the commenter has a user mapping (Admin → User mappings; see "Configure triggering surfaces"). Add any missing user with **Add / update** in that section.
+- For Linear: ensure the comment contains `@loupfeed` (case-insensitive)
 - For Slack: ensure the bot is invited to the channel and the message is an `@mention`
 - Check server logs for webhook processing errors
 

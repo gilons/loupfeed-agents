@@ -1,6 +1,6 @@
 import type { AgentThread } from "./agents/types"
 
-export const NOTIFICATIONS_PREF_KEY = "open-swe-notifications-enabled"
+export const NOTIFICATIONS_PREF_KEY = "loupfeed-agents-notifications-enabled"
 
 export function notificationsSupported(): boolean {
   return typeof window !== "undefined" && "Notification" in window

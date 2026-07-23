@@ -1,4 +1,4 @@
-"""Forward-looking Open SWE Agent usage telemetry."""
+"""Forward-looking loupfeed agents Agent usage telemetry."""
 
 from __future__ import annotations
 
@@ -180,7 +180,7 @@ async def record_agent_thread_usage(
     effort: str | None,
     source: str | None,
 ) -> None:
-    """Record one Open SWE Agent thread for leaderboard aggregation."""
+    """Record one loupfeed agents Agent thread for leaderboard aggregation."""
     if not thread_id:
         return
     source_value = source if isinstance(source, str) and source in _AGENT_SOURCES else "dashboard"
@@ -221,7 +221,7 @@ async def record_agent_pr_usage(
     state: str | None = None,
     merged: bool = False,
 ) -> None:
-    """Record one Open SWE Agent pull request for leaderboard aggregation."""
+    """Record one loupfeed agents Agent pull request for leaderboard aggregation."""
     if not owner or not repo or not pr_number:
         return
     key = f"{owner}/{repo}#{pr_number}"
@@ -651,7 +651,7 @@ def _usage_payload_from_snapshot(
         row = {
             "rank": _coerce_int(user.get("rank")),
             "user": {
-                "name": user.get("name") if is_current_user or github_login else "Open SWE user",
+                "name": user.get("name") if is_current_user or github_login else "loupfeed agents user",
                 "github_login": github_login,
                 "email": (user.get("email") or None) if is_current_user else None,
             },
@@ -689,7 +689,7 @@ async def list_agent_usage_leaderboard(
     schedule_usage_refresh: Callable[[Period], None] | None = None,
     schedule_reviewer_refresh: Callable[[Period], None] | None = None,
 ) -> dict[str, Any]:
-    """Return cached Open SWE Agent and reviewer usage stats."""
+    """Return cached loupfeed agents Agent and reviewer usage stats."""
     normalized_period = _normalize_period(period)
     usage_snapshot, generated_at_ms = await _cached_snapshot(
         USAGE_LEADERBOARD_CACHE_NAMESPACE,

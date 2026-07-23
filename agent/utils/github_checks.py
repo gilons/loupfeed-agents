@@ -1,6 +1,6 @@
 """GitHub Checks API helpers for the reviewer's PR check run.
 
-A check run named ``Open SWE Review`` is created on the PR head SHA when an
+A check run named ``loupfeed agents Review`` is created on the PR head SHA when an
 auto-review is dispatched, so the PR's checks section shows the review as
 in-progress. ``publish_review`` (or the after-agent fallback) completes it.
 
@@ -19,8 +19,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-REVIEW_CHECK_RUN_NAME = "Open SWE Review"
-AUTOFIX_CHECK_RUN_NAME = "Open SWE Auto-fix"
+REVIEW_CHECK_RUN_NAME = "loupfeed agents Review"
+AUTOFIX_CHECK_RUN_NAME = "loupfeed agents Auto-fix"
 
 _GITHUB_API_BASE = "https://api.github.com"
 
@@ -47,7 +47,7 @@ async def create_review_check_run(
     token: str,
     details_url: str | None = None,
 ) -> int | None:
-    """Create an in-progress ``Open SWE Review`` check run on ``head_sha``.
+    """Create an in-progress ``loupfeed agents Review`` check run on ``head_sha``.
 
     Returns the check run id, or ``None`` on any failure (most commonly the
     App lacking the Checks permission).
@@ -59,7 +59,7 @@ async def create_review_check_run(
         "started_at": _utc_now_iso(),
         "output": {
             "title": "Review in progress",
-            "summary": "Open SWE is reviewing this pull request…",
+            "summary": "loupfeed agents is reviewing this pull request…",
         },
     }
     if details_url:
@@ -127,7 +127,7 @@ async def post_autofix_status_check(
     summary: str,
     details_url: str | None = None,
 ) -> bool:
-    """Post an informational, completed ``Open SWE Auto-fix`` check on ``head_sha``.
+    """Post an informational, completed ``loupfeed agents Auto-fix`` check on ``head_sha``.
 
     Completed immediately as ``neutral`` so it's non-blocking and never leaves a
     dangling in-progress check that could gate branch protection. Used as the
@@ -171,10 +171,10 @@ def review_check_conclusion(surfaced_count: int) -> tuple[CheckConclusion, str, 
         return (
             "success",
             f"Found {surfaced_count} potential {issue_word}",
-            f"Open SWE surfaced {surfaced_count} potential {issue_word} on this pull request.",
+            f"loupfeed agents surfaced {surfaced_count} potential {issue_word} on this pull request.",
         )
     return (
         "success",
         "No issues found",
-        "Open SWE reviewed this pull request and found no issues.",
+        "loupfeed agents reviewed this pull request and found no issues.",
     )

@@ -1,14 +1,14 @@
 """Auto-fix CI failures and review feedback on agent-authored pull requests.
 
 This is the shared core for "PR babysitting": when a CI check fails (or a
-reviewer leaves actionable feedback) on a PR that Open SWE opened, locate the
+reviewer leaves actionable feedback) on a PR that loupfeed agents opened, locate the
 originating agent thread and dispatch a confidence-gated fix run on it.
 
 Both the GitHub webhook path (:mod:`agent.webapp`) and the polling fallback
 (:mod:`agent.ci_monitor`) call into here, so all the skip-rules, dedupe, and
 loop-capping live in one place. Skip-rules mirror Cursor/Claude Code:
 
-* Only PRs Open SWE authored (an agent thread with this ``pr_url`` exists).
+* Only PRs loupfeed agents authored (an agent thread with this ``pr_url`` exists).
 * Skip failures inherited from the base branch.
 * Skip when the latest commit was authored by a human (don't fight pushes).
 * Dedupe per (head SHA + failing-check set); cap total attempts.
@@ -298,7 +298,7 @@ async def handle_ci_failure(
             token=token,
             title="Auto-fix limit reached",
             summary=(
-                f"Open SWE has attempted {attempts} auto-fixes on this PR and "
+                f"loupfeed agents has attempted {attempts} auto-fixes on this PR and "
                 "stopped to avoid a loop. Push a commit or comment to continue."
             ),
             details_url=dashboard_thread_url(thread_id),
@@ -368,7 +368,7 @@ async def handle_ci_failure(
         token=token,
         title=f"Auto-fixing {len(actionable)} failing check(s)",
         summary=(
-            "Open SWE is investigating the failing checks and will push a fix if "
+            "loupfeed agents is investigating the failing checks and will push a fix if "
             "the cause is clear. Track progress in the linked run."
         ),
         details_url=dashboard_thread_url(thread_id),

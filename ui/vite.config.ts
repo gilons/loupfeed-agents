@@ -29,8 +29,8 @@ const config = defineConfig({
       },
       manifest: {
         id: "/",
-        name: "Open SWE",
-        short_name: "Open SWE",
+        name: "loupfeed agents",
+        short_name: "loupfeed agents",
         description: "Open-source coding agents for Slack, Linear, and GitHub.",
         start_url: "/",
         scope: "/",

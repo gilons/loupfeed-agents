@@ -141,8 +141,8 @@ function CloudAgentsPage() {
   return (
     <AppShell
       user={session.data}
-      title="Open SWE Agent"
-      description="Configure how the Open SWE Agent picks a model, repository, and PR defaults."
+      title="loupfeed agents Agent"
+      description="Configure how the loupfeed agents Agent picks a model, repository, and PR defaults."
     >
       <SettingsSection title="Defaults">
         <div className="divide-y divide-border">
@@ -272,7 +272,7 @@ function CloudAgentsPage() {
               <Input
                 id="branch-prefix"
                 className="w-56"
-                placeholder="open-swe/"
+                placeholder="loupfeed-agents/"
                 value={branchPrefix}
                 onChange={(e) => setBranchPrefix(e.target.value)}
               />

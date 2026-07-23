@@ -38,7 +38,7 @@ def resolve_finding_thread(
     note: str,
     status: str = "dismissed",
 ) -> dict[str, Any]:
-    """Resolve the GitHub review thread for a tracked Open SWE finding.
+    """Resolve the GitHub review thread for a tracked loupfeed agents finding.
 
     Use ``status="resolved"`` when the code now fixes the issue. Use
     ``status="dismissed"`` when analysis shows the original review comment was

@@ -563,7 +563,7 @@ def _build_finding_reply_context(
     safe_author = _safe_login(reply_author)
     safe_reply_body = _escape_for_data_block(reply_body)
     return (
-        f"## User replied to an Open SWE review finding\n\n"
+        f"## User replied to an loupfeed agents review finding\n\n"
         f"- repo: {repo_owner}/{repo_name}\n"
         f"- pr_number: {pr_number}\n"
         f"- url: {pr_url}\n"

@@ -1,4 +1,4 @@
-"""Main entry point and CLI loop for Open SWE agent."""
+"""Main entry point and CLI loop for loupfeed agents agent."""
 # ruff: noqa: E402
 
 # Suppress deprecation warnings from langchain_core (e.g., Pydantic V1 on Python 3.14+)

@@ -525,7 +525,7 @@ async def _open_swe_already_reviewed(
 ) -> bool:
     """Decide whether to suppress a duplicate empty "no issues found" summary.
 
-    Suppress only when we are *certain* a prior Open SWE review exists, so a
+    Suppress only when we are *certain* a prior loupfeed agents review exists, so a
     transient GitHub failure never causes a double-post:
 
     - ``is_re_review`` is a durable signal (the dispatching webhook set it from
@@ -677,7 +677,7 @@ def _comment_id_by_finding_id(
 ) -> dict[str, int]:
     """Map each surfaced finding id to its GitHub comment id via the marker.
 
-    The embedded Open SWE marker is the *only* source of truth. Every comment
+    The embedded loupfeed agents marker is the *only* source of truth. Every comment
     this reviewer posts carries a ``<!-- open-swe-review-comment {...} -->``
     marker keyed by finding id (see ``render_inline_comment_body``), so the
     match is exact. The old ``(path, line, body)`` fallback collided whenever
@@ -842,10 +842,10 @@ async def _maybe_post_slack_completion_reply(
         return
 
     if surfaced_count == 0:
-        headline = "*Open SWE Review*: No issues found."
+        headline = "*loupfeed agents Review*: No issues found."
     else:
         issue_word = "issue" if surfaced_count == 1 else "issues"
-        headline = f"*Open SWE Review* found {surfaced_count} potential {issue_word}."
+        headline = f"*loupfeed agents Review* found {surfaced_count} potential {issue_word}."
 
     review_url = f"https://github.com/{owner}/{repo}/pull/{pr_number}"
     if isinstance(review_id, int):

@@ -1,5 +1,5 @@
 [Unit]
-Description=Open SWE backend (LangGraph agent + FastAPI webhooks)
+Description=loupfeed agents platform (LangGraph agents + FastAPI webhooks)
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
@@ -7,9 +7,9 @@ Requires=docker.service
 [Service]
 Type=simple
 User=ec2-user
-WorkingDirectory=/opt/open-swe
+WorkingDirectory=/opt/loupfeed-agents
 Environment=PATH=/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStartPre=/usr/local/bin/open-swe-render-env
+ExecStartPre=/usr/local/bin/loupfeed-render-env
 ExecStart=/home/ec2-user/.local/bin/uv run langgraph dev --host 0.0.0.0 --port 2024 --no-browser
 Restart=on-failure
 RestartSec=5

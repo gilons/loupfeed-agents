@@ -29,8 +29,8 @@ interface NavItem {
 
 const NAV: Array<NavItem> = [
   { to: "/my-settings", label: "Profile Settings", icon: IoOptionsOutline },
-  { to: "/cloud-agents", label: "Open SWE Agent", icon: IoCloudOutline },
-  { to: "/review", label: "Open SWE Review", icon: IoGitPullRequestOutline },
+  { to: "/cloud-agents", label: "loupfeed agents Agent", icon: IoCloudOutline },
+  { to: "/review", label: "loupfeed agents Review", icon: IoGitPullRequestOutline },
   { to: "/usage", label: "Usage", icon: IoStatsChartOutline },
   { to: "/admin", label: "Admin", icon: IoSettingsOutline, adminOnly: true },
 ]
@@ -48,7 +48,7 @@ export function AppSidebar({ user }: { user: SessionUser }) {
           className="flex items-center gap-2 font-heading text-sm font-medium tracking-tight"
         >
           <img src="/logo-mark.png" alt="" className="size-5" />
-          open-swe
+          loupfeed-agents
         </Link>
         <SidebarCollapseButton onToggle={layout.toggle} />
       </div>

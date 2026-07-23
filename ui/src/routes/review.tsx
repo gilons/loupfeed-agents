@@ -36,7 +36,7 @@ const TRIGGER_MODES: Array<{ value: TriggerMode; label: string; description: str
   {
     value: "manual",
     label: "Manual Only",
-    description: "Only review when '@open-swe review' is commented",
+    description: "Only review when '@loupfeed-agents review' is commented",
   },
 ];
 
@@ -113,7 +113,7 @@ function ReviewPage() {
 
   const triggerDescription =
     TRIGGER_MODES.find((m) => m.value === current.trigger_mode)?.description ??
-    "Open SWE Review will automatically review every push to a PR";
+    "loupfeed agents Review will automatically review every push to a PR";
 
   const trimmedGuidelines = guidelinesDraft.trim();
   const savedGuidelines = current.org_guidelines ?? "";
@@ -127,7 +127,7 @@ function ReviewPage() {
   return (
     <AppShell
       user={session.data}
-      title="Open SWE Review"
+      title="loupfeed agents Review"
       description="Automatically review pull requests for bugs and issues. Runs are billed based on underlying agent usage."
     >
       <RepositoriesSection canEdit={canEdit} />
@@ -203,7 +203,7 @@ function ReviewPage() {
           />
           <SettingsRow
             label="Review Draft PRs"
-            description="Org-wide default for whether Open SWE Review runs on draft PRs. Each user can override this in Profile Settings."
+            description="Org-wide default for whether loupfeed agents Review runs on draft PRs. Each user can override this in Profile Settings."
             control={
               <Switch
                 checked={current.review_draft_prs}
@@ -347,7 +347,7 @@ function RepositoriesSection({ canEdit: _canEdit }: { canEdit: boolean }) {
         )}
         {!loading && grouped.length === 0 && (
           <p className="px-4 py-3 text-xs text-muted-foreground">
-            No GitHub App installations found. Install the open-swe GitHub App on an
+            No GitHub App installations found. Install the loupfeed-agents GitHub App on an
             account or org to manage repos here.
           </p>
         )}

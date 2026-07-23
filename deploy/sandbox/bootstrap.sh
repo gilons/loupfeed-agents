@@ -4,16 +4,16 @@
 #
 # Idempotent. Run as root on the target instance after the repo is cloned to
 # /opt/open-swe. Requires: the instance role can read the Secrets Manager
-# secret named in bin/open-swe-render-env (default: agent-sandbox/open-swe).
+# secret named in /etc/loupfeed/render-config (default: loupfeed-agents/agent).
 set -euo pipefail
 
-REPO_DIR=${REPO_DIR:-/opt/open-swe}
+REPO_DIR=${REPO_DIR:-/opt/loupfeed-agents}
 NODE_VERSION=${NODE_VERSION:-v24.5.0}
 PNPM_VERSION=${PNPM_VERSION:-10.12.1}
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 echo "== 1/7 sandbox proxy shims + env renderer =="
-install -m 755 "$HERE/bin/open-swe-render-env" /usr/local/bin/open-swe-render-env
+install -m 755 "$HERE/bin/loupfeed-render-env" /usr/local/bin/loupfeed-render-env
 install -m 755 "$HERE/bin/agent-gh-token"      /usr/local/bin/agent-gh-token
 install -m 755 "$HERE/bin/agent-git-credential" /usr/local/bin/agent-git-credential
 # gh wrapper must shadow /usr/bin/gh via PATH order (systemd PATH puts /usr/local/bin first)
@@ -49,10 +49,12 @@ echo "== 6/7 org overlay (optional) =="
 # Org-specific config lives OUTSIDE the platform repo (e.g. a private config
 # repo). Point PRIVATE_CONFIG_DIR at a checkout containing:
 #   env/agent.env        → appended to the rendered .env (ALLOWED_GITHUB_ORGS, LLM_MODEL_ID, ...)
+#   env/render-config    → sourced by loupfeed-render-env (SECRET_ID, REGION, REPO_DIR)
 #   prompt/working-env.md → appended to the agent's working-env prompt section
 mkdir -p /etc/loupfeed
 if [ -n "${PRIVATE_CONFIG_DIR:-}" ] && [ -d "$PRIVATE_CONFIG_DIR" ]; then
   [ -f "$PRIVATE_CONFIG_DIR/env/agent.env" ] && install -m 600 "$PRIVATE_CONFIG_DIR/env/agent.env" /etc/loupfeed/agent.env
+  [ -f "$PRIVATE_CONFIG_DIR/env/render-config" ] && install -m 600 "$PRIVATE_CONFIG_DIR/env/render-config" /etc/loupfeed/render-config
   [ -f "$PRIVATE_CONFIG_DIR/prompt/working-env.md" ] && install -m 644 "$PRIVATE_CONFIG_DIR/prompt/working-env.md" /etc/loupfeed/working-env.md
   echo "installed org overlay from $PRIVATE_CONFIG_DIR"
 else
@@ -61,8 +63,8 @@ fi
 
 echo "== 7/7 workspace dir + systemd unit =="
 mkdir -p /srv/agent-workspace && chown ec2-user:ec2-user /srv/agent-workspace
-install -m 644 "$HERE/open-swe.service" /etc/systemd/system/open-swe.service
+install -m 644 "$HERE/loupfeed-agents.service" /etc/systemd/system/loupfeed-agents.service
 systemctl daemon-reload
-systemctl enable open-swe
+systemctl enable loupfeed-agents
 
-echo "bootstrap complete — start with: systemctl start open-swe"
+echo "bootstrap complete — start with: systemctl start loupfeed-agents"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Mint a GitHub App installation token (cached ~40min). Reads creds from /opt/open-swe/.env.
+# Mint a GitHub App installation token (cached ~40min). Reads creds from the rendered .env.
 set -euo pipefail
 CACHE_DIR=/var/tmp/agent-gh
 CACHE="$CACHE_DIR/token"
@@ -8,7 +8,8 @@ if [ -f "$CACHE" ] && [ -s "$CACHE" ]; then
   age=$(( $(date +%s) - $(stat -c %Y "$CACHE" 2>/dev/null || echo 0) ))
   if [ "$age" -lt 2400 ]; then cat "$CACHE"; exit 0; fi
 fi
-set -a; . /opt/open-swe/.env; set +a
+ENV_FILE=${LOUPFEED_ENV_FILE:-/opt/loupfeed-agents/.env}
+set -a; . "$ENV_FILE"; set +a
 : "${GITHUB_APP_ID:?}"; : "${GITHUB_APP_INSTALLATION_ID:?}"; : "${GITHUB_APP_PRIVATE_KEY:?}"
 KEYFILE=$(mktemp); trap 'rm -f "$KEYFILE"' EXIT
 printf '%s' "$GITHUB_APP_PRIVATE_KEY" | sed 's/\\n/\n/g' > "$KEYFILE"

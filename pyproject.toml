@@ -1,7 +1,7 @@
 [project]
 name = "loupfeed-agents"
 version = "0.1.0"
-description = "loupfeed agents platform - open-source coding + PM agents (Open SWE lineage): GitHub/Teams entry points, LangGraph threads, MCP connectors"
+description = "loupfeed agents platform - open-source coding + PM agents (loupfeed agents lineage): GitHub/Teams entry points, LangGraph threads, MCP connectors"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

@@ -1,6 +1,6 @@
 # Customization Guide
 
-Open SWE is designed to be forked and customized for your org. The core agent is assembled in a single function — `get_agent()` in `agent/server.py` — where you can swap out the sandbox, model, tools, and triggers.
+loupfeed agents is designed to be forked and customized for your org. The core agent is assembled in a single function — `get_agent()` in `agent/server.py` — where you can swap out the sandbox, model, tools, and triggers.
 
 ```python
 # agent/server.py — the key lines
@@ -26,11 +26,11 @@ return create_deep_agent(
 
 ## 1. Sandbox
 
-By default, Open SWE runs each task in a [LangSmith cloud sandbox](https://docs.smith.langchain.com/) — an isolated Linux environment where the agent clones the repo and executes commands. Sandbox creation and connection is handled in `agent/integrations/langsmith.py`.
+By default, loupfeed agents runs each task in a [LangSmith cloud sandbox](https://docs.smith.langchain.com/) — an isolated Linux environment where the agent clones the repo and executes commands. Sandbox creation and connection is handled in `agent/integrations/langsmith.py`.
 
 ### Using a custom sandbox snapshot
 
-Build a snapshot in LangSmith (UI or `SandboxClient.create_snapshot`) from your Docker image and point Open SWE at its UUID:
+Build a snapshot in LangSmith (UI or `SandboxClient.create_snapshot`) from your Docker image and point loupfeed agents at its UUID:
 
 ```bash
 DEFAULT_SANDBOX_SNAPSHOT_ID="<snapshot-uuid>"                      # Required
@@ -43,7 +43,7 @@ DEFAULT_SANDBOX_DELETE_AFTER_STOP_SECONDS="86400"                  # Optional, d
 
 This is useful for pre-installing languages, frameworks, or internal tools that your repos depend on — reducing setup time per agent run. The default snapshot includes the GitHub CLI; agents invoke it as `GH_TOKEN=dummy gh <command>` and rely on the LangSmith proxy for the real credentials.
 
-For LangSmith sandboxes, Open SWE configures two GitHub proxy rules whenever a sandbox is created or reattached to a run:
+For LangSmith sandboxes, loupfeed agents configures two GitHub proxy rules whenever a sandbox is created or reattached to a run:
 
 - `github.com` / `*.github.com` receive Basic auth for git-over-HTTPS operations.
 - `api.github.com` receives Bearer auth for `gh` and REST API operations.
@@ -193,7 +193,7 @@ async def get_agent(config: RunnableConfig) -> Pregel:
 
 ## 3. Tools
 
-Open SWE ships with a small set of custom tools on top of the built-in Deep Agents tools (file operations, shell execution, subagents, todos). GitHub operations are handled by `GH_TOKEN=dummy gh` inside the sandbox.
+loupfeed agents ships with a small set of custom tools on top of the built-in Deep Agents tools (file operations, shell execution, subagents, todos). GitHub operations are handled by `GH_TOKEN=dummy gh` inside the sandbox.
 
 | Tool | File | Purpose |
 |---|---|---|
@@ -272,7 +272,7 @@ return create_deep_agent(tools=tools, ...)
 
 ## 4. Triggers
 
-Open SWE supports three invocation surfaces: Linear, Slack, and GitHub. Each is implemented as a webhook endpoint in `agent/webapp.py`. You can add, remove, or modify triggers independently.
+loupfeed agents supports three invocation surfaces: Linear, Slack, and GitHub. Each is implemented as a webhook endpoint in `agent/webapp.py`. You can add, remove, or modify triggers independently.
 
 ### Removing a trigger
 
@@ -322,7 +322,7 @@ LINEAR_TEAM_TO_REPO = {
 }
 ```
 
-Users can also override the team/project mapping on a per-comment basis by including `repo:owner/name` in their `@openswe` comment. This takes priority over the mapping — the mapping is used as a fallback when no repo is specified in the comment. If the team/project isn't found in the mapping either, `DEFAULT_REPO_OWNER`/`DEFAULT_REPO_NAME` is used.
+Users can also override the team/project mapping on a per-comment basis by including `repo:owner/name` in their `@loupfeed` comment. This takes priority over the mapping — the mapping is used as a fallback when no repo is specified in the comment. If the team/project isn't found in the mapping either, `DEFAULT_REPO_OWNER`/`DEFAULT_REPO_NAME` is used.
 
 ### Customizing Slack routing
 
@@ -411,7 +411,7 @@ The system prompt is assembled in `agent/prompt.py` from modular sections. You c
 
 ### Default prompt file
 
-Open SWE supports a `default_prompt.md` file for org-level instructions that apply to **every** agent run, regardless of which repository is being worked on. This is the recommended way to set default repository preferences, org conventions, and shared guidelines.
+loupfeed agents supports a `default_prompt.md` file for org-level instructions that apply to **every** agent run, regardless of which repository is being worked on. This is the recommended way to set default repository preferences, org conventions, and shared guidelines.
 
 The file is loaded at agent startup and injected into the system prompt between the task overview and repository setup sections.
 
@@ -445,18 +445,18 @@ When no repository is specified, work on the **my-app** repository under **my-or
 | | `default_prompt.md` | `AGENTS.md` |
 |---|---|---|
 | Scope | All tasks, all repos | Single repository |
-| Location | Open SWE project root | Target repo root |
+| Location | loupfeed agents project root | Target repo root |
 | Use for | Default repo, org conventions | Repo-specific coding standards |
 
 ### Using AGENTS.md
 
-Drop an `AGENTS.md` file in the root of any repository to add repo-specific instructions. The agent reads it from the sandbox at startup and appends it to the system prompt. This is the easiest way to encode conventions per-repo without modifying Open SWE's code.
+Drop an `AGENTS.md` file in the root of any repository to add repo-specific instructions. The agent reads it from the sandbox at startup and appends it to the system prompt. This is the easiest way to encode conventions per-repo without modifying loupfeed agents's code.
 
 ---
 
 ## 6. Middleware
 
-Middleware hooks run around the agent loop. Open SWE includes:
+Middleware hooks run around the agent loop. loupfeed agents includes:
 
 | Middleware | Type | Purpose |
 |---|---|---|

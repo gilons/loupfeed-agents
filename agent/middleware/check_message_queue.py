@@ -21,7 +21,7 @@ from ..utils.multimodal import fetch_image_block, vision_not_supported_warning
 
 logger = logging.getLogger(__name__)
 
-DASHBOARD_HANDOFF_MARKER = "[Open SWE Web handoff]"
+DASHBOARD_HANDOFF_MARKER = "[loupfeed agents Web handoff]"
 DASHBOARD_HANDOFF_INSTRUCTION = (
     f"{DASHBOARD_HANDOFF_MARKER} This follow-up was sent from Web. "
     "The conversation has moved to Web, so answer in the dashboard stream with a normal "

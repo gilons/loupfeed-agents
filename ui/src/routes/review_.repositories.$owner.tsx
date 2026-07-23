@@ -90,10 +90,10 @@ function RepositoriesOwnerPage() {
       title={owner}
       description={
         canEdit
-          ? "Toggle a repository to opt it into automatic Open SWE Review."
+          ? "Toggle a repository to opt it into automatic loupfeed agents Review."
           : "Only team admins can modify enabled repositories."
       }
-      backTo={{ to: "/review", label: "Back to Open SWE Review" }}
+      backTo={{ to: "/review", label: "Back to loupfeed agents Review" }}
     >
       <section className="space-y-3">
         <div className="flex items-center justify-between">

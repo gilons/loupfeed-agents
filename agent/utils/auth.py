@@ -68,7 +68,7 @@ def is_bot_token_only_mode() -> bool:
 def _retry_instruction(source: str) -> str:
     if source == "slack":
         return "Once authenticated, mention me again in this Slack thread to retry."
-    return "Once authenticated, reply to this issue mentioning @openswe to retry."
+    return "Once authenticated, reply to this issue mentioning @loupfeed to retry."
 
 
 def _source_account_label(source: str) -> str:
@@ -262,9 +262,9 @@ async def leave_failure_comment(
 
             settings_url = build_settings_url()
             link = (
-                f"<{settings_url}|your Open SWE settings>"
+                f"<{settings_url}|your loupfeed agents settings>"
                 if settings_url
-                else "your Open SWE settings"
+                else "your loupfeed agents settings"
             )
             logger.info(
                 "Posting generic auth-failure notice to Slack channel %s thread %s",
@@ -336,7 +336,7 @@ async def resolve_token_from_email(
         auth_link_text = _auth_link_text(source, auth_url)
         message = (
             "🔐 **GitHub Authentication Required**\n\n"
-            f"To allow the Open SWE agent to work on this {work_item_label}, "
+            f"To allow the loupfeed agents agent to work on this {work_item_label}, "
             "please authenticate with GitHub by clicking the link below:\n\n"
             f"{auth_link_text}\n\n"
             f"{_retry_instruction(source)}"

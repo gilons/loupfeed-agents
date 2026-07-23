@@ -6,23 +6,27 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+import os
+
 import httpx
 
 logger = logging.getLogger(__name__)
 
-OPEN_SWE_BOT_NAME = "open-swe[bot]"
+# Must match a REAL GitHub bot account (co-author emails that do not resolve
+# break e.g. Vercel preview deploys). Override when the GitHub App is renamed.
+OPEN_SWE_BOT_NAME = os.environ.get("AGENT_BOT_NAME", "open-swe[bot]")
 # Use the open-swe user noreply address: the bot's numeric noreply
 # (215916821+open-swe[bot]@...) doesn't resolve to a GitHub account Vercel
 # accepts, which broke preview deploys on commits carrying this co-author.
-OPEN_SWE_BOT_EMAIL = "open-swe@users.noreply.github.com"
+OPEN_SWE_BOT_EMAIL = os.environ.get("AGENT_BOT_EMAIL", "open-swe@users.noreply.github.com")
 
-PR_ATTRIBUTION_TEXT = "Made by [Open SWE]"
-PR_ATTRIBUTION_DEFAULT_URL = "https://openswe.vercel.app"
+PR_ATTRIBUTION_TEXT = "Made by [loupfeed agents]"
+PR_ATTRIBUTION_DEFAULT_URL = os.environ.get("AGENT_ATTRIBUTION_URL", "https://github.com/gilons/loupfeed-agents")
 PR_ATTRIBUTION_FOOTER = f"{PR_ATTRIBUTION_TEXT}({PR_ATTRIBUTION_DEFAULT_URL})"
 
 
 def build_pr_attribution_footer(thread_url: str | None = None) -> str:
-    """Build the Open SWE PR footer, linking the run's thread when available."""
+    """Build the loupfeed agents PR footer, linking the run's thread when available."""
     url = thread_url.strip() if isinstance(thread_url, str) and thread_url.strip() else ""
     return f"{PR_ATTRIBUTION_TEXT}({url or PR_ATTRIBUTION_DEFAULT_URL})"
 
@@ -169,9 +173,9 @@ def add_pr_collaboration_note(
     identity: CollaboratorIdentity | None = None,
     thread_url: str | None = None,
 ) -> str:
-    """Append the Open SWE attribution footer to a PR body.
+    """Append the loupfeed agents attribution footer to a PR body.
 
-    The PR is opened as the triggering user, so the body only credits Open SWE
+    The PR is opened as the triggering user, so the body only credits loupfeed agents
     as the collaborator. The footer links the run's thread when available. Any
     legacy double-attribution footer is replaced.
     """

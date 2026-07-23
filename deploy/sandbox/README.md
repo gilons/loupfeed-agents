@@ -6,12 +6,12 @@ the box instead of a hosted sandbox provider.
 
 ## Layout
 
-- **Repo** at `/opt/open-swe`; systemd unit `open-swe` runs
+- **Repo** at `/opt/loupfeed-agents`; systemd unit `loupfeed-agents` runs
   `uv run langgraph dev --host 0.0.0.0 --port 2024` (hot-reloads `.py` edits;
-  `.env` changes need `systemctl restart open-swe`).
-- **Secrets**: an AWS Secrets Manager secret (default `agent-sandbox/open-swe`)
-  is the source of truth; `bin/open-swe-render-env` (ExecStartPre) renders
-  `/opt/open-swe/.env` (0600). The instance role must be able to read it.
+  `.env` changes need `systemctl restart loupfeed-agents`).
+- **Secrets**: an AWS Secrets Manager secret (default `loupfeed-agents/agent`, override via `/etc/loupfeed/render-config`)
+  is the source of truth; `bin/loupfeed-render-env` (ExecStartPre) renders
+  `/opt/loupfeed-agents/.env` (0600). The instance role must be able to read it.
 - **Ingress**: expose :2024 to GitHub webhooks however your infra prefers
   (e.g. CloudFront VPC origin, ALB, or a tunnel).
 - **Local sandbox proxy shims** (`bin/`): upstream assumes a hosted proxy that
@@ -49,16 +49,17 @@ repo** with:
 | File | Consumed by | Contents |
 |---|---|---|
 | `env/agent.env` | appended verbatim to the rendered `.env` | `ALLOWED_GITHUB_ORGS=<your-org>` (trigger allowlist), optional `LLM_MODEL_ID=...`, any other env overrides |
+| `env/render-config` | sourced by the env renderer | `SECRET_ID=...`, `REGION=...`, `REPO_DIR=...` overrides |
 | `prompt/working-env.md` | appended to the agent's working-environment prompt section (`WORKING_ENV_EXTRA_FILE`, default `/etc/loupfeed/working-env.md`) | your cloud-access conventions, repo workflow pointers, runtime notes. Must not contain bare `{` / `}`. |
 
 ## Fresh box
 
 ```sh
-git clone <this repo> /opt/open-swe
+git clone <this repo> /opt/loupfeed-agents
 git clone <your private config repo> /opt/loupfeed-config   # optional but recommended
-sudo PRIVATE_CONFIG_DIR=/opt/loupfeed-config REPO_DIR=/opt/open-swe \
-  /opt/open-swe/deploy/sandbox/bootstrap.sh
-sudo systemctl start open-swe
+sudo PRIVATE_CONFIG_DIR=/opt/loupfeed-config REPO_DIR=/opt/loupfeed-agents \
+  /opt/loupfeed-agents/deploy/sandbox/bootstrap.sh
+sudo systemctl start loupfeed-agents
 ```
 
 The bootstrap also pins runtimes the agent commonly needs on the systemd PATH

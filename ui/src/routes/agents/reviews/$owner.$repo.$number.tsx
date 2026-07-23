@@ -56,7 +56,7 @@ export const Route = createFileRoute("/agents/reviews/$owner/$repo/$number")({
 
 type SideTab = "info" | "chat"
 
-const REVIEW_VIEW_STORAGE_KEY = "open-swe.review.view"
+const REVIEW_VIEW_STORAGE_KEY = "loupfeed-agents.review.view"
 
 interface ResolvedGroup {
   index: number
@@ -227,7 +227,7 @@ function ReviewBody({
     void warmDiffHighlighter()
   }, [])
 
-  const viewedStorageKey = `open-swe.review.viewed.${detail.owner}/${detail.repo}/${detail.number}.${detail.head_sha}`
+  const viewedStorageKey = `loupfeed-agents.review.viewed.${detail.owner}/${detail.repo}/${detail.number}.${detail.head_sha}`
   const [viewed, setViewed] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set()
     try {
@@ -253,7 +253,7 @@ function ReviewBody({
     [viewedStorageKey]
   )
 
-  const readStorageKey = `open-swe.review.read.${detail.thread_id}`
+  const readStorageKey = `loupfeed-agents.review.read.${detail.thread_id}`
   const [read, setRead] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set()
     try {
@@ -977,7 +977,7 @@ function Badgeish({ children }: { children: React.ReactNode }) {
   )
 }
 
-const REVIEW_PANEL_STORAGE_WIDTH = "open-swe.review-panel.width"
+const REVIEW_PANEL_STORAGE_WIDTH = "loupfeed-agents.review-panel.width"
 const REVIEW_PANEL_DEFAULT_WIDTH = 420
 const REVIEW_PANEL_MIN_WIDTH = 360
 // Keep at least this much room for the PR content column so the panel can grow

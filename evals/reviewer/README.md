@@ -1,6 +1,6 @@
 # Reviewer Eval
 
-Offline LangSmith eval for the Open SWE Reviewer graph against the 50 PRs from
+Offline LangSmith eval for the loupfeed agents Reviewer graph against the 50 PRs from
 `withmartian/code-review-benchmark`.
 
 ## Layout
@@ -32,7 +32,7 @@ evals/reviewer/
 uv run python -m evals.reviewer.build_dataset --dry-run
 
 # Upload for real
-uv run python -m evals.reviewer.build_dataset --dataset-name openswe-reviewer-v1
+uv run python -m evals.reviewer.build_dataset --dataset-name loupfeed-reviewer-v1
 ```
 
 Each example carries: `repo`, `pr_number`, `pr_url`, `base_sha`, `head_sha`,
@@ -78,8 +78,8 @@ Required repository config:
 
 ### Tracing project
 
-Eval traces are routed to the **`open-swe-evals`** LangSmith project (set via
-`langsmith_project` in `config.toml`, default `open-swe-evals`) so they stay out
+Eval traces are routed to the **`loupfeed-agents-evals`** LangSmith project (set via
+`langsmith_project` in `config.toml`, default `loupfeed-agents-evals`) so they stay out
 of the deployment's production tracing project. The admin-triggered run forces
 the same project via the `LANGSMITH_PROJECT` env var; override the default with
 `EVAL_LANGSMITH_PROJECT`.

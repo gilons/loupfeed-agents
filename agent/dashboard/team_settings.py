@@ -1,4 +1,4 @@
-"""Team-wide Open SWE Review (Bugbot) settings stored in LangGraph Store.
+"""Team-wide loupfeed agents Review (Bugbot) settings stored in LangGraph Store.
 
 A single record keyed ``"default"`` keeps all instance-wide reviewer
 configuration in one place. Per-repo style prompts live in

@@ -4,8 +4,8 @@ import { SidebarSimpleIcon } from "@phosphor-icons/react";
 import { useHotkey } from "@/lib/hotkeys";
 import { cn } from "@/lib/utils";
 
-const STORAGE_WIDTH = "open-swe.sidebar.width";
-const STORAGE_COLLAPSED = "open-swe.sidebar.collapsed";
+const STORAGE_WIDTH = "loupfeed-agents.sidebar.width";
+const STORAGE_COLLAPSED = "loupfeed-agents.sidebar.collapsed";
 
 export const SIDEBAR_DEFAULT_WIDTH = 260;
 export const SIDEBAR_MIN_WIDTH = 200;

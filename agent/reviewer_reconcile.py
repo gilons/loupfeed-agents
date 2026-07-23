@@ -251,7 +251,7 @@ async def reconcile_findings_with_review_threads(
     reviewer_thread_id: str,
     review_threads: list[ReviewThread],
 ) -> list[Finding]:
-    """Sync tracked Open SWE findings with the current GitHub review-thread state."""
+    """Sync tracked loupfeed agents findings with the current GitHub review-thread state."""
     findings = await list_findings(reviewer_thread_id)
     if not findings:
         return findings

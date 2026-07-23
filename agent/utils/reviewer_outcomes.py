@@ -82,7 +82,7 @@ def _ensure_dataset(client: LangSmithClient) -> Any:
     ds = client.create_dataset(
         dataset_name=OUTCOMES_DATASET_NAME,
         description=(
-            "Open SWE reviewer finding outcomes (resolved / dismissed / 👍👎) "
+            "loupfeed agents reviewer finding outcomes (resolved / dismissed / 👍👎) "
             "captured in production for per-repo continual learning."
         ),
     )

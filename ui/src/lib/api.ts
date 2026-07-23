@@ -1,5 +1,5 @@
 /**
- * Typed client for the open-swe dashboard backend.
+ * Typed client for the loupfeed-agents dashboard backend.
  *
  * All requests are sent with credentials so the httpOnly `osw_session`
  * cookie set by the OAuth callback rides along on cross-origin calls.

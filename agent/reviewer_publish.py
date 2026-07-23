@@ -104,7 +104,7 @@ def render_inline_comment_body(finding: Finding) -> str:
         *(Refers to lines X-Y)*
 
         ---
-        *Your feedback helps Open SWE learn. React with 👍 or 👎 to tell us if this review comment was useful.*
+        *Your feedback helps loupfeed agents learn. React with 👍 or 👎 to tell us if this review comment was useful.*
 
         ```suggestion
         <replacement>
@@ -136,7 +136,7 @@ def render_inline_comment_body(finding: Finding) -> str:
         [
             "",
             "---",
-            "*Your feedback helps Open SWE learn. React with 👍 or 👎 to tell us if this review comment was useful.*",
+            "*Your feedback helps loupfeed agents learn. React with 👍 or 👎 to tell us if this review comment was useful.*",
         ]
     )
     body = "\n".join(body_parts)
@@ -234,10 +234,10 @@ def render_inline_comment_payload(finding: Finding) -> dict[str, Any] | None:
 
 
 def review_summary_marker(pr_number: int) -> str:
-    """The hidden marker embedded in every Open SWE review summary body.
+    """The hidden marker embedded in every loupfeed agents review summary body.
 
     Used both to stamp the summary (``render_review_body``) and to detect
-    (``open_swe_review_exists``) whether Open SWE has already reviewed a PR.
+    (``open_swe_review_exists``) whether loupfeed agents has already reviewed a PR.
     """
     return f"<!-- open-swe-reviewer pr={pr_number} -->"
 
@@ -284,14 +284,14 @@ def render_review_body(
     out_of_diff_findings = out_of_diff_findings or []
     if surfaced_count == 0 and not out_of_diff_findings:
         headline = (
-            "## ✅ Open SWE Review: No issues found\n\n"
-            "Open SWE reviewed this PR and found no potential bugs to report."
+            "## ✅ loupfeed agents Review: No issues found\n\n"
+            "loupfeed agents reviewed this PR and found no potential bugs to report."
         )
     elif surfaced_count == 0:
-        headline = "**Open SWE Review** found no issues in the changed lines."
+        headline = "**loupfeed agents Review** found no issues in the changed lines."
     else:
         issue_word = "issue" if surfaced_count == 1 else "issues"
-        headline = f"**Open SWE Review** found {surfaced_count} potential {issue_word}."
+        headline = f"**loupfeed agents Review** found {surfaced_count} potential {issue_word}."
 
     parts = [headline]
     if out_of_diff_findings:
@@ -300,7 +300,7 @@ def render_review_body(
     if ui_url:
         links.append(f"[Open in Web]({ui_url})")
     if trace_url:
-        links.append(f"[View Open SWE trace]({trace_url})")
+        links.append(f"[View loupfeed agents trace]({trace_url})")
     if links:
         parts.append(" • ".join(links))
     parts.append(review_summary_marker(pr_number))
@@ -324,13 +324,13 @@ def render_status_comment(
     "Open in Web" link while the run is live; deleted once ``publish_review``
     posts the review (which carries the same link).
     """
-    parts = ["## 🔍 Open SWE Review: in progress\n\nOpen SWE is reviewing this PR…"]
+    parts = ["## 🔍 loupfeed agents Review: in progress\n\nloupfeed agents is reviewing this PR…"]
     links = []
     ui_url = dashboard_thread_url(thread_id) if thread_id else None
     if ui_url:
         links.append(f"[Open in Web]({ui_url})")
     if trace_url:
-        links.append(f"[View Open SWE trace]({trace_url})")
+        links.append(f"[View loupfeed agents trace]({trace_url})")
     if links:
         parts.append(" • ".join(links))
     parts.append(status_comment_marker(pr_number))
@@ -436,7 +436,7 @@ async def settle_review_check_run(
     title: str,
     summary: str,
 ) -> None:
-    """Complete the tracked ``Open SWE Review`` check run, if one is open.
+    """Complete the tracked ``loupfeed agents Review`` check run, if one is open.
 
     The dispatching webhook stores ``review_check_run_id`` in reviewer thread
     metadata when it creates the check. No-op when none is tracked. The id is
@@ -485,19 +485,19 @@ async def open_swe_review_exists(
     pr_number: int,
     token: str,
 ) -> bool | None:
-    """Return whether Open SWE has already posted a review summary on this PR.
+    """Return whether loupfeed agents has already posted a review summary on this PR.
 
     Detected via the ``review_summary_marker`` that ``render_review_body``
-    embeds in every Open SWE review body. The reviewer uses this to avoid
+    embeds in every loupfeed agents review body. The reviewer uses this to avoid
     posting a duplicate "No issues found" summary when the ``re_review`` config
     flag is stale — a push that lands mid-run is delivered as a queued message
     into the still-running first-review run, whose configurable still says
     ``re_review=False``, so the empty-review guard can't trust that flag alone.
 
     Tri-state on purpose:
-    - ``True``  — an Open SWE review summary was found.
+    - ``True``  — an loupfeed agents review summary was found.
     - ``False`` — the full review list was paginated successfully and carried
-      no Open SWE summary.
+      no loupfeed agents summary.
     - ``None``  — the answer is unknown because an API call (or a page partway
       through pagination) failed. Callers must not treat ``None`` as "no review
       exists": the old fail-open-as-False behaviour double-posted "no issues"

@@ -117,7 +117,7 @@ function TriggerReviewSection() {
   return (
     <SettingsSection
       title="Trigger a review"
-      description="Manually start an Open SWE Review run on a pull request. The repository must be enabled for review."
+      description="Manually start an loupfeed agents Review run on a pull request. The repository must be enabled for review."
     >
       <div className="flex flex-col gap-2 p-4">
         <div className="flex items-center gap-2">
@@ -475,8 +475,8 @@ function GlobalDefaultsSection({ models }: { models: Array<ModelOption> }) {
     >
       <div className="divide-y divide-border">
         <RolePicker
-          label="Open SWE Agent"
-          description="Model used for code-writing runs triggered from Slack, Linear, GitHub, and the Open SWE Agent."
+          label="loupfeed agents Agent"
+          description="Model used for code-writing runs triggered from Slack, Linear, GitHub, and the loupfeed agents Agent."
           models={models}
           model={settings.data?.default_agent_model ?? null}
           effort={settings.data?.default_agent_reasoning_effort ?? null}
@@ -491,7 +491,7 @@ function GlobalDefaultsSection({ models }: { models: Array<ModelOption> }) {
           disabled={!settings.data || save.isPending}
         />
         <RolePicker
-          label="Open SWE Agent subagents"
+          label="loupfeed agents Agent subagents"
           description="Model used by delegated main-agent tasks."
           models={models}
           model={settings.data?.default_agent_subagent_model ?? null}
@@ -529,7 +529,7 @@ function GlobalDefaultsSection({ models }: { models: Array<ModelOption> }) {
           }
         />
         <RolePicker
-          label="Open SWE Reviewer"
+          label="loupfeed agents Reviewer"
           description="Model used for PR review runs."
           models={models}
           model={settings.data?.default_reviewer_model ?? null}
@@ -545,7 +545,7 @@ function GlobalDefaultsSection({ models }: { models: Array<ModelOption> }) {
           disabled={!settings.data || save.isPending}
         />
         <RolePicker
-          label="Open SWE Reviewer subagents"
+          label="loupfeed agents Reviewer subagents"
           description="Model used by delegated reviewer tasks."
           models={models}
           model={settings.data?.default_reviewer_subagent_model ?? null}
@@ -563,7 +563,7 @@ function GlobalDefaultsSection({ models }: { models: Array<ModelOption> }) {
           disabled={!settings.data || save.isPending}
         />
         <RolePicker
-          label="Open SWE Review Diff Grouping"
+          label="loupfeed agents Review Diff Grouping"
           description="Model used for the review's 'AI sorted' view that groups changed files into a logical walkthrough. Inherits the Reviewer subagent default when unset."
           models={models}
           model={settings.data?.default_grouping_model ?? null}
@@ -588,7 +588,7 @@ function GlobalDefaultsSection({ models }: { models: Array<ModelOption> }) {
           disabled={!settings.data || save.isPending}
         />
         <RolePicker
-          label="Open SWE Review Chat"
+          label="loupfeed agents Review Chat"
           description="Model used by the 'chat with this PR' assistant on the review page. Inherits the Agent default when unset."
           models={models}
           model={settings.data?.default_chat_model ?? null}

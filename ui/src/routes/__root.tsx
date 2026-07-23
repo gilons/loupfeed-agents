@@ -13,7 +13,7 @@ import { useState } from "react"
 import appCss from "../styles.css?url"
 import { makeQueryClient } from "@/lib/query"
 
-const themeInitScript = `(function(){try{var t=localStorage.getItem("open-swe-theme");var d=t==="dark"||((!t||t==="system")&&window.matchMedia("(prefers-color-scheme: dark)").matches);var r=document.documentElement;r.classList.toggle("dark",d);r.style.colorScheme=d?"dark":"light";}catch(e){}})();`
+const themeInitScript = `(function(){try{var t=localStorage.getItem("loupfeed-agents-theme");var d=t==="dark"||((!t||t==="system")&&window.matchMedia("(prefers-color-scheme: dark)").matches);var r=document.documentElement;r.classList.toggle("dark",d);r.style.colorScheme=d?"dark":"light";}catch(e){}})();`
 
 export const Route = createRootRoute({
   head: () => ({
@@ -24,7 +24,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1, maximum-scale=1",
       },
       { name: "theme-color", content: "#000000" },
-      { title: "open-swe" },
+      { title: "loupfeed-agents" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

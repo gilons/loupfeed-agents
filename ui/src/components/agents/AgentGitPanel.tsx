@@ -72,8 +72,8 @@ function commonDirPrefix(paths: Array<string>): string {
   return depth === 0 ? "" : `${base.slice(0, depth).join("/")}/`
 }
 
-const PANEL_STORAGE_WIDTH = "open-swe.gitpanel.width"
-const PANEL_STORAGE_COLLAPSED = "open-swe.gitpanel.collapsed"
+const PANEL_STORAGE_WIDTH = "loupfeed-agents.gitpanel.width"
+const PANEL_STORAGE_COLLAPSED = "loupfeed-agents.gitpanel.collapsed"
 const COLLAPSED_STATE_TRUE = "1"
 const COLLAPSED_STATE_FALSE = "0"
 const PANEL_DEFAULT_WIDTH = 420

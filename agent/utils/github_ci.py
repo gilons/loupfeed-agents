@@ -27,8 +27,8 @@ _GITHUB_API_BASE = "https://api.github.com"
 # excluded: they're rarely a code problem the agent can fix.
 FAILING_CONCLUSIONS: frozenset[str] = frozenset(["failure", "timed_out", "action_required"])
 
-# Check runs Open SWE itself produces; never treat them as fixable CI.
-_OPEN_SWE_CHECK_NAMES: frozenset[str] = frozenset([REVIEW_CHECK_RUN_NAME, "Open SWE Auto-fix"])
+# Check runs loupfeed agents itself produces; never treat them as fixable CI.
+_OPEN_SWE_CHECK_NAMES: frozenset[str] = frozenset([REVIEW_CHECK_RUN_NAME, "loupfeed agents Auto-fix"])
 
 
 class FailingCheck(dict):

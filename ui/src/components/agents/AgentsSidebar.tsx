@@ -121,7 +121,7 @@ export function AgentsSidebar({ user, activeThreadId }: AgentsSidebarProps) {
           className="flex items-center gap-2 font-heading text-sm font-medium tracking-tight text-[var(--ui-text)]"
         >
           <img src="/logo-mark.png" alt="" className="size-5" />
-          open-swe
+          loupfeed-agents
         </Link>
         <SidebarCollapseButton onToggle={layout.toggle} />
       </div>

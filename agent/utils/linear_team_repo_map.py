@@ -25,6 +25,6 @@ LINEAR_TEAM_TO_REPO: dict[str, dict[str, Any] | dict[str, str]] = {
         "default": {"owner": "langchain-ai", "name": "ai-sdr"},
     },
     "Docs": {"default": {"owner": "langchain-ai", "name": "docs"}},
-    "Open SWE": {"default": {"owner": "langchain-ai", "name": "open-swe"}},
+    "loupfeed agents": {"default": {"owner": "langchain-ai", "name": "open-swe"}},
     "LangSmith Deployment": {"default": {"owner": "langchain-ai", "name": "langgraph-api"}},
 }

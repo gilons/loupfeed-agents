@@ -99,7 +99,7 @@ function UsagePage() {
           </p>
         ) : !leaderboard.data?.rows.length ? (
           <div className="p-6 text-center text-xs text-muted-foreground">
-            No Open SWE Agent usage has been recorded for{" "}
+            No loupfeed agents Agent usage has been recorded for{" "}
             {PERIOD_LABELS[activePeriod].toLowerCase()} yet.
           </div>
         ) : (
@@ -112,7 +112,7 @@ function UsagePage() {
 
       <SettingsSection
         title="Reviewer stats"
-        description="Issues surfaced by Open SWE Review and how often users addressed them."
+        description="Issues surfaced by loupfeed agents Review and how often users addressed them."
       >
         {leaderboard.isLoading ? (
           <div className="grid gap-3 p-4 sm:grid-cols-2">
