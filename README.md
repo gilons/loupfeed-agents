@@ -1,150 +1,65 @@
 <div align="center">
-  <a href="https://github.com/langchain-ai/open-swe">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="static/dark.svg">
-      <source media="(prefers-color-scheme: light)" srcset="static/light.svg">
-      <img alt="Open SWE Logo" src="static/dark.svg" width="35%">
-    </picture>
-  </a>
+  <h1>loupfeed agents</h1>
+  <h3>Open-source platform for your team's internal agents — coding and product management — reachable from the tools you already work in.</h3>
 </div>
 
 <div align="center">
-  <h3>Open-source framework for building your org's internal coding agent.</h3>
-</div>
-
-<div align="center">
-  <a href="https://opensource.org/licenses/MIT" target="_blank"><img src="https://img.shields.io/github/license/langchain-ai/open-swe" alt="License"></a>
-  <a href="https://github.com/langchain-ai/open-swe/stargazers" target="_blank"><img src="https://img.shields.io/github/stars/langchain-ai/open-swe" alt="GitHub Stars"></a>
+  <a href="https://opensource.org/licenses/MIT" target="_blank"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://github.com/langchain-ai/langgraph" target="_blank"><img src="https://img.shields.io/badge/Built%20on-LangGraph-blue" alt="Built on LangGraph"></a>
   <a href="https://github.com/langchain-ai/deepagents" target="_blank"><img src="https://img.shields.io/badge/Built%20on-Deep%20Agents-blue" alt="Built on Deep Agents"></a>
-  <a href="https://x.com/langchain" target="_blank"><img src="https://img.shields.io/twitter/url/https/twitter.com/langchain.svg?style=social&label=Follow%20%40LangChain" alt="Twitter / X"></a>
 </div>
 
 <br>
 
-Elite engineering orgs like Stripe, Ramp, and Coinbase are building their own internal coding agents — Slackbots, CLIs, and web apps that meet engineers where they already work. These agents are connected to internal systems with the right context, permissioning, and safety boundaries to operate with minimal human oversight.
+**loupfeed agents** is a self-hostable agents platform: install it once, connect your tools, and invoke specialized agents from every entry point your team already uses —
 
-Open SWE is the open-source version of this pattern. Built on [LangGraph](https://langchain-ai.github.io/langgraph/) and [Deep Agents](https://github.com/langchain-ai/deepagents), it gives you the same architecture those companies built internally: cloud sandboxes, Slack and Linear invocation, subagent orchestration, and automatic PR creation — ready to customize for your own codebase and workflows.
+- **loupfeedcode** — the coding agent. `@`-mention it on a GitHub issue or PR (or from Slack / Linear); it clones the repo into an isolated sandbox, implements, validates, and opens a draft PR. A separate **reviewer** graph reviews PRs with a diff-anchored findings model, and an **analyzer** graph learns your repo's review style over time.
+- **loupfeedpm** *(in development)* — the product-management agent. Answers questions and acts on your planning system (Jira/Confluence via the Atlassian Rovo MCP connector; Notion, Linear, and others later), triages ideas out of meeting transcripts, and keeps planning threads moving — invoked from Microsoft Teams chats, channels, and call chats.
 
-> [!NOTE]
-> 💬 Read the **announcement blog post [here](https://blog.langchain.com/open-swe-an-open-source-framework-for-internal-coding-agents/)**
-
----
+One platform underneath both: durable **thread-scoped sessions** (a conversation thread on the surface ⇄ an agent thread here), a single place to configure **tools and connectors**, **BYO-LLM**, and git as a first-class citizen.
 
 ## Architecture
 
-Open SWE makes the same core architectural decisions as the best internal coding agents. Here's how it maps to the patterns described in [this overview](https://x.com/kishan_dahya/status/2028971339974099317) of Stripe's Minions, Ramp's Inspect, and Coinbase's Cloudbot:
+Built on [LangGraph](https://langchain-ai.github.io/langgraph/) + [Deep Agents](https://github.com/langchain-ai/deepagents). Each graph is an agent; all graphs share the platform's sessions, connectors, and configuration:
 
-### 1. Agent Harness — Composed on Deep Agents
+| Graph | Purpose |
+|---|---|
+| `agent` | The coding agent — plans, edits, tests, and opens PRs from an isolated sandbox. |
+| `reviewer` | Read-only PR reviews with a single evolving findings model. |
+| `analyzer` | Learns per-repo review style from history and its own finding outcomes. |
+| `pm` *(planned)* | The PM agent — planning-system connectors (MCP), meeting-transcript triage, thread-native conversations. |
 
-Rather than forking an existing agent or building from scratch, Open SWE **composes** on the [Deep Agents](https://github.com/langchain-ai/deepagents) framework — similar to how Ramp built on top of OpenCode. This gives you an upgrade path (pull in upstream improvements) while letting you customize the orchestration, tools, and middleware for your org.
+Key properties:
 
-```python
-create_deep_agent(
-    model="openai:gpt-5.5",
-    system_prompt=construct_system_prompt(...),
-    tools=[http_request, fetch_url, linear_comment, slack_thread_reply],
-    backend=sandbox_backend,
-    middleware=[ToolErrorMiddleware(), check_message_queue_before_model, ...],
-)
+- **Isolated execution.** Every task runs in its own sandbox — Modal, Daytona, Runloop, LangSmith, or `local` mode on your own box — with full permissions *inside* the boundary and nothing outside it. Each thread's sandbox persists across follow-up messages, auto-recreates when unreachable, and tasks run in parallel without queuing.
+- **Deterministic thread routing.** The same issue / PR / conversation always routes back to the same agent thread. Message the agent while it's working — mid-run messages are injected before its next step.
+- **Curated tools, not accumulated ones.** A small toolset (`execute`, `fetch_url`, `http_request`, source-channel replies) plus the built-in Deep Agents file/search/subagent tools. Optional server-side observability tools (Datadog MCP, LangSmith) load only for authorized users' runs, with credentials that never enter the sandbox.
+- **BYO-LLM.** Model selection is configuration, not code: any OpenAI-compatible endpoint (`OPENAI_BASE_URL`), Anthropic, per-user and team defaults, and model fallbacks.
+- **Context from where the work lives.** A repo-root `AGENTS.md` is injected into the system prompt; the full issue / thread history rides along on invocation.
+- **Org config stays out of the platform.** Deployments customize via an overlay — an env file plus an optional prompt-extension markdown appended to the agent's working-environment guidance — never by forking. See [deploy/sandbox/README.md](deploy/sandbox/README.md) for the contract.
+- **Web dashboard** (`ui/`) — GitHub login, per-user model/profile settings, team defaults, enabled repos, review-style management, and an agents chat UI.
+
+## Getting started
+
+- **[INSTALLATION.md](INSTALLATION.md)** — local dev (backend + dashboard), GitHub App creation, triggers, production deployment.
+- **[deploy/sandbox/README.md](deploy/sandbox/README.md)** — single-box AWS deployment (`SANDBOX_TYPE=local`): systemd unit, Secrets Manager-rendered env, GitHub App auth shims, and the org-overlay contract.
+- **[CUSTOMIZATION.md](CUSTOMIZATION.md)** — swap the sandbox, model, tools, triggers, system prompt, and middleware.
+
+```bash
+make install   # uv pip install -e .
+make dev       # langgraph dev — serves all graphs + the FastAPI webhook app
+make test      # pytest
 ```
 
-### 2. Sandbox — Isolated Cloud Environments
+## Roadmap
 
-Every task runs in its own **isolated cloud sandbox** — a remote Linux environment with full shell access. The repo is cloned in, the agent gets full permissions, and the blast radius of any mistake is fully contained. No production access, no confirmation prompts.
+The platform direction (multi-surface entry points, thread⇄session model, connector registry) is documented in `docs/11-agents-platform.md` of the [loupfeed](https://github.com/gilons/loupfeed) repo:
 
-Open SWE supports multiple sandbox providers out of the box — [Modal](https://modal.com/), [Daytona](https://www.daytona.io/), [Runloop](https://www.runloop.ai/), and [LangSmith](https://smith.langchain.com/) — and you can plug in your own. See the [Customization Guide](CUSTOMIZATION.md#1-sandbox) for details.
+1. **Microsoft Teams entry point** — 1:1 chats, channel threads, and meeting chats; connector sign-in initiated from Teams.
+2. **`pm` graph** — Atlassian Rovo MCP + git; generic connector registry (Notion, Linear, …).
+3. **Meeting intelligence** — transcript-driven triage and classification after calls.
+4. **Unified install** — one onboarding across GitHub + Teams with shared identity.
 
-This follows the principle all three companies converge on: **isolate first, then give full permissions inside the boundary.**
+## License & credits
 
-- Each thread gets a persistent sandbox (reused across follow-up messages)
-- Sandboxes auto-recreate if they become unreachable
-- Multiple tasks run in parallel — each in its own sandbox, no queuing
-
-### 3. Tools — Curated, Not Accumulated
-
-Stripe's key insight: *tool curation matters more than tool quantity.* Open SWE follows this principle with a small, focused toolset:
-
-| Tool | Purpose |
-|---|---|
-| `execute` | Shell commands in the sandbox |
-| `fetch_url` | Fetch web pages as markdown |
-| `http_request` | API calls (GET, POST, etc.) |
-| `linear_comment` | Post updates to Linear tickets |
-| `slack_thread_reply` | Reply in Slack threads |
-
-GitHub operations are performed with `GH_TOKEN=dummy gh` inside the sandbox, backed by the LangSmith proxy. Plus the built-in Deep Agents tools: `read_file`, `write_file`, `edit_file`, `ls`, `glob`, `grep`, `write_todos`, and `task` (subagent spawning).
-
-**Optional observability tools (server-side):** Admins can connect Datadog and LangSmith from team settings (Admin → Observability credentials). When connected, the agent gains Datadog tools (via Datadog's hosted MCP server, default `toolsets=core`) and read-only LangSmith tools (`langsmith_get_trace`, `langsmith_list_runs`). These run in the LangGraph server process using credentials encrypted at rest — the sandbox never holds Datadog or LangSmith keys. They are loaded **only for runs triggered by an authorized user** (admins, plus any emails in `OBSERVABILITY_AUTHORIZED_EMAILS`), so a prompt-injected run from an untrusted contributor cannot reach team observability data. Use scoped, read-oriented keys regardless: observability data (logs, traces) is attacker-influenced content that can carry prompt injection, and the agent has network egress — the same residual-risk class as `web_search` / `fetch_url`.
-
-### 4. Context Engineering — AGENTS.md + Source Context
-
-Open SWE gathers context from two sources:
-
-- **`AGENTS.md`** — If the repo contains an `AGENTS.md` file at the root, it's read from the sandbox and injected into the system prompt. This is your repo-level equivalent of Stripe's rule files: encoding conventions, testing requirements, and architectural decisions that every agent run should follow.
-- **Source context** — The full Linear issue (title, description, comments) or Slack thread history is assembled and passed to the agent, so it starts with rich context rather than discovering everything through tool calls.
-
-### 5. Orchestration — Subagents + Middleware
-
-Open SWE's orchestration has two layers:
-
-**Subagents:** The Deep Agents framework natively supports spawning child agents via the `task` tool. The main agent can fan out independent subtasks to isolated subagents — each with its own middleware stack, todo list, and file operations. This is similar to Ramp's child sessions for parallel work.
-
-**Middleware:** Deterministic middleware hooks run around the agent loop:
-
-- **`check_message_queue_before_model`** — Injects follow-up messages (Linear comments or Slack messages that arrive mid-run) before the next model call. You can message the agent while it's working and it'll pick up your input at its next step.
-- **`notify_step_limit_reached`** — After-agent hook that posts a Slack reply when the agent hits the model-call limit, so users get a clear signal instead of silence.
-- **`ToolErrorMiddleware`** — Catches and handles tool errors gracefully.
-
-### 6. Invocation — Slack, Linear, and GitHub
-
-All three companies in the article converge on **Slack as the primary invocation surface**. Open SWE does the same:
-
-- **Slack** — Mention the bot in any thread. Supports `repo:owner/name` syntax to specify which repo to work on. The agent replies in-thread with status updates and PR links.
-- **Linear** — Comment `@openswe` on any issue. The agent reads the full issue context, reacts with 👀 to acknowledge, and posts results back as comments.
-- **GitHub** — Tag `@openswe` in PR comments on agent-created PRs to have it address review feedback and push fixes to the same branch.
-
-Each invocation creates a deterministic thread ID, so follow-up messages on the same issue or thread route to the same running agent.
-
-### 7. Validation — Prompt-Driven
-
-The agent is instructed to run linters, formatters, and tests before committing, and is responsible end-to-end for committing, pushing, opening/updating the draft PR, and replying in the source channel.
-This is an area where you can extend Open SWE for your org: add deterministic CI checks, visual verification, or review gates as additional middleware. See the [Customization Guide](CUSTOMIZATION.md#6-middleware) for how.
-
----
-
-## Comparison
-
-| Decision | Open SWE | Stripe (Minions) | Ramp (Inspect) | Coinbase (Cloudbot) |
-|---|---|---|---|---|
-| **Harness** | Composed (Deep Agents/LangGraph) | Forked (Goose) | Composed (OpenCode) | Built from scratch |
-| **Sandbox** | Pluggable (Modal, Daytona, Runloop, etc.) | AWS EC2 devboxes (pre-warmed) | Modal containers (pre-warmed) | In-house |
-| **Tools** | ~15, curated | ~500, curated per-agent | OpenCode SDK + extensions | MCPs + custom Skills |
-| **Context** | AGENTS.md + issue/thread | Rule files + pre-hydration | OpenCode built-in | Linear-first + MCPs |
-| **Orchestration** | Subagents + middleware | Blueprints (deterministic + agentic) | Sessions + child sessions | Three modes |
-| **Invocation** | Slack, Linear, GitHub | Slack + embedded buttons | Slack + web + Chrome extension | Slack-native |
-| **Validation** | Prompt-driven | 3-layer (local + CI + 1 retry) | Visual DOM verification | Agent councils + auto-merge |
-
----
-
-## Features
-
-- **Trigger from Linear, Slack, or GitHub** — mention `@openswe` in a comment to kick off a task
-- **Instant acknowledgement** — reacts with 👀 the moment it picks up your message
-- **Message it while it's running** — send follow-up messages mid-task and it'll pick them up before its next step
-- **Run multiple tasks in parallel** — each task runs in its own isolated cloud sandbox
-- **GitHub OAuth built-in** — authenticates with your GitHub account automatically
-- **Opens PRs automatically** — commits changes and opens a draft PR when done, linked back to your ticket
-- **Subagent support** — the agent can spawn child agents for parallel subtasks
-- **Web dashboard** — a companion app (in `ui/`) for GitHub login, per-user model/profile settings, team defaults, enabled-repo and review-style management, user mappings, and an Agents chat UI
-
----
-
-## Getting Started
-
-- **[Installation Guide](INSTALLATION.md)** — local dev (backend + dashboard), GitHub App creation, LangSmith, Linear/Slack/GitHub triggers, and production deployment
-- **[Customization Guide](CUSTOMIZATION.md)** — swap the sandbox, model, tools, triggers, system prompt, and middleware for your org
-
-## License
-
-MIT
+MIT. Derived from [Open SWE](https://github.com/langchain-ai/open-swe) by LangChain — thanks to its authors for the foundation this platform builds on.
