@@ -14,6 +14,7 @@ dev hierarchies) is appended from ``PM_PROMPT_EXTRA_FILE`` (default
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import warnings
@@ -36,7 +37,8 @@ from .middleware import (
     SanitizeToolInputsMiddleware,
     ToolErrorMiddleware,
 )
-from .pm_connectors import connector_names, load_connector_tools
+from .connector_auth import connection_status
+from .pm_connectors import load_connector_tools
 from .server import (
     DEFAULT_LLM_MAX_TOKENS,
     DEFAULT_RECURSION_LIMIT,
@@ -71,9 +73,12 @@ several people may talk into the same thread. Messages may carry speaker labels 
 ("Name: ..."); track who said what, and address people by name when useful.
 
 Tools:
-- **Planning-system tools** (Jira, Confluence, ... — loaded from the connected MCP \
-connectors{connector_note}): searching issues (JQL) and pages, reading, creating, updating, \
-commenting, transitioning. Tool names and schemas come from the connector — read them.
+- **Planning-system tools** — loaded from whichever MCP connectors your workspace has \
+connected (Jira/Confluence via Atlassian today; more connectors over time). Tool names and \
+schemas come from the connector — read them.
+
+Connector state right now:
+{connector_status}
 - `web_search`, `fetch_url`, `http_request` — external docs and APIs.
 - `read_repo_file`, `search_repo_code` — read-only access to the thread's bound GitHub \
 repository, when one is configured for this thread.
@@ -91,8 +96,10 @@ backlog, then create or enrich the right item — and cite where the idea came f
 requester (from speaker labels or thread context) and scope queries to them.
 - **Stay inside the thread's register.** Replies are chat messages: short, skimmable, \
 leading with the answer or the action taken. No report formatting unless asked.
-- **If a tool fails or a connector is missing, say so plainly** and do what you can with \
-the conversation context alone. Never invent issue keys, people, links, or decisions.
+- **If a task needs a connector that is NOT CONNECTED, say so briefly and share its \
+connect link** (an admin connects it once for the whole workspace) — then help as far as \
+conversation context allows. Never pretend to have access you don't have, and never invent \
+issue keys, people, links, or decisions.
 """
 
 # Deployment-specific guidance (site URLs, workflow conventions, team norms).
@@ -153,9 +160,17 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
         openai_reasoning_default=DEFAULT_LLM_REASONING,
     )
 
-    names = connector_names()
-    connector_note = f": {', '.join(names)}" if names else " — none connected right now"
-    system_prompt = PM_PROMPT.format(connector_note=connector_note) + _prompt_extras()
+    status = await asyncio.to_thread(connection_status)
+    base = os.environ.get("CONNECTOR_PUBLIC_BASE_URL", "").rstrip("/")
+    lines = []
+    for name, st in sorted(status.items()):
+        if st.get("connected"):
+            lines.append(f"- {name}: CONNECTED")
+        else:
+            link = f"{base}/connectors/{name}/start" if base else "(no public URL configured)"
+            lines.append(f"- {name}: NOT CONNECTED — connect link: {link}")
+    connector_status = "\n".join(lines) if lines else "- (no connectors registered)"
+    system_prompt = PM_PROMPT.format(connector_status=connector_status) + _prompt_extras()
 
     return create_deep_agent(
         model=make_model(model_id, **model_kwargs),

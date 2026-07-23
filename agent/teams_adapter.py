@@ -35,7 +35,6 @@ from fastapi import APIRouter, BackgroundTasks, Request, Response
 from jwt import PyJWKClient
 from langgraph_sdk import get_client
 
-from .connector_auth import connection_status
 
 logger = logging.getLogger(__name__)
 
@@ -201,19 +200,6 @@ def _speaker_labeled(activity: dict, text: str) -> str:
 async def _process_message(activity: dict) -> None:
     text = _clean_text(activity)
     if not text:
-        return
-
-    status = await asyncio.to_thread(connection_status)
-    atlassian = status.get("atlassian") or {}
-    if not atlassian.get("connected"):
-        base = os.environ.get("CONNECTOR_PUBLIC_BASE_URL", "").rstrip("/")
-        connect_url = f"{base}/connectors/atlassian/start" if base else "(connector URL not configured)"
-        await _reply(
-            activity,
-            "I'm not connected to your planning system yet. An admin needs to connect "
-            f"Atlassian once for the whole org: [Connect Atlassian]({connect_url}) — "
-            "then mention me again.",
-        )
         return
 
     await _send_typing(activity)
