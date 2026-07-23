@@ -106,7 +106,7 @@ async def _get_connector_token() -> str:
     global _connector_token
     if _connector_token and time.time() < _connector_token["expires_at"] - 60:
         return _connector_token["value"]
-    tenant = os.environ.get("TEAMS_APP_TENANT_ID", "botframework.com")
+    tenant = os.environ.get("TEAMS_APP_TENANT_ID") or "botframework.com"
     async with httpx.AsyncClient(timeout=15) as http:
         resp = await http.post(
             f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
