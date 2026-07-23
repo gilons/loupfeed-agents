@@ -1,3 +1,4 @@
+import os
 from typing import Literal, TypedDict, Unpack
 
 from langchain.chat_models import init_chat_model
@@ -52,8 +53,18 @@ def make_model(model_id: str, **kwargs: Unpack[ModelKwargs]):
     model_kwargs.setdefault("max_retries", DEFAULT_MAX_RETRIES)
 
     if model_id.startswith("openai:"):
-        model_kwargs["base_url"] = OPENAI_RESPONSES_WS_BASE_URL
-        model_kwargs["use_responses_api"] = True
+        _custom_base = os.environ.get("OPENAI_BASE_URL")
+        if _custom_base:
+            # Custom OpenAI-compatible endpoint (e.g. TensorIX): force the
+            # Chat Completions API and drop Responses-API-only kwargs, which
+            # such endpoints reject with HTTP 403 on /v1/responses.
+            model_kwargs["base_url"] = _custom_base
+            model_kwargs["use_responses_api"] = False
+            for _k in ("reasoning", "thinking", "thinking_level", "effort"):
+                model_kwargs.pop(_k, None)
+        else:
+            model_kwargs["base_url"] = OPENAI_RESPONSES_WS_BASE_URL
+            model_kwargs["use_responses_api"] = True
 
     return init_chat_model(model=model_id, **model_kwargs)
 
@@ -68,6 +79,8 @@ def fallback_model_id_for(primary_model_id: str) -> str | None:
     if primary_model_id.startswith("anthropic:"):
         return "openai:gpt-5.5"
     if primary_model_id.startswith("openai:"):
+        if os.environ.get("OPENAI_BASE_URL"):
+            return None
         return "anthropic:claude-opus-4-5"
     return None
 
