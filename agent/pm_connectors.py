@@ -26,7 +26,7 @@ from .connector_auth import connector_registry, get_access_token
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ATLASSIAN_MCP_URL = "https://mcp.atlassian.com/v1/mcp"
+DEFAULT_ATLASSIAN_MCP_URL = "https://mcp.atlassian.com/v1/mcp/authv2"
 
 # MCP tool listing does a network handshake; cache briefly so back-to-back runs
 # don't pay it every time. Failures are cached too (avoid hammering a dead

@@ -31,7 +31,7 @@ from .encryption import decrypt_token, encrypt_token
 logger = logging.getLogger(__name__)
 
 CLIENT_NAME = "loupfeed agents"
-DEFAULT_ATLASSIAN_MCP_URL = "https://mcp.atlassian.com/v1/mcp"
+DEFAULT_ATLASSIAN_MCP_URL = "https://mcp.atlassian.com/v1/mcp/authv2"
 
 _PENDING_TTL_SECONDS = 900
 _REFRESH_SKEW_SECONDS = 120
