@@ -1,9 +1,9 @@
 """GitHub organization membership checks for webhook gating."""
 
-from __future__ import os
-import annotations
+from __future__ import annotations
 
 import logging
+import os
 
 import httpx
 
