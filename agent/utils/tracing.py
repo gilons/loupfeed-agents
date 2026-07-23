@@ -7,8 +7,9 @@ import langsmith as ls
 from langgraph.graph.state import RunnableConfig
 from langgraph.pregel import Pregel
 
-AGENT_TRACING_PROJECT = "open-swe-agent"
-REVIEW_TRACING_PROJECT = "open-swe-review"
+AGENT_TRACING_PROJECT = "loupfeed-agents"
+REVIEW_TRACING_PROJECT = "loupfeed-agents-review"
+PM_TRACING_PROJECT = "loupfeed-agents-pm"
 
 
 def traced_graph_factory(

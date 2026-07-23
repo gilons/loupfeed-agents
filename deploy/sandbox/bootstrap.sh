@@ -56,6 +56,7 @@ if [ -n "${PRIVATE_CONFIG_DIR:-}" ] && [ -d "$PRIVATE_CONFIG_DIR" ]; then
   [ -f "$PRIVATE_CONFIG_DIR/env/agent.env" ] && install -o ec2-user -g ec2-user -m 600 "$PRIVATE_CONFIG_DIR/env/agent.env" /etc/loupfeed/agent.env
   [ -f "$PRIVATE_CONFIG_DIR/env/render-config" ] && install -o ec2-user -g ec2-user -m 600 "$PRIVATE_CONFIG_DIR/env/render-config" /etc/loupfeed/render-config
   [ -f "$PRIVATE_CONFIG_DIR/prompt/working-env.md" ] && install -m 644 "$PRIVATE_CONFIG_DIR/prompt/working-env.md" /etc/loupfeed/working-env.md
+  [ -f "$PRIVATE_CONFIG_DIR/prompt/pm-prompt.md" ] && install -m 644 "$PRIVATE_CONFIG_DIR/prompt/pm-prompt.md" /etc/loupfeed/pm-prompt.md
   echo "installed org overlay from $PRIVATE_CONFIG_DIR"
 else
   echo "no PRIVATE_CONFIG_DIR — platform runs with defaults (no org allowlist, upstream default model)"

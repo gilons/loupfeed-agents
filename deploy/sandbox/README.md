@@ -50,7 +50,8 @@ repo** with:
 |---|---|---|
 | `env/agent.env` | appended verbatim to the rendered `.env` | `ALLOWED_GITHUB_ORGS=<your-org>` (trigger allowlist), optional `LLM_MODEL_ID=...`, any other env overrides |
 | `env/render-config` | sourced by the env renderer | `SECRET_ID=...`, `REGION=...`, `REPO_DIR=...` overrides |
-| `prompt/working-env.md` | appended to the agent's working-environment prompt section (`WORKING_ENV_EXTRA_FILE`, default `/etc/loupfeed/working-env.md`) | your cloud-access conventions, repo workflow pointers, runtime notes. Must not contain bare `{` / `}`. |
+| `prompt/pm-prompt.md` | appended to the pm graph's system prompt (`PM_PROMPT_EXTRA_FILE`, default `/etc/loupfeed/pm-prompt.md`) | your planning-workspace conventions (site URLs, idea→planning→dev workflow, labels) |
+| `prompt/working-env.md` | appended to the coding agent's working-environment prompt section (`WORKING_ENV_EXTRA_FILE`, default `/etc/loupfeed/working-env.md`) | your cloud-access conventions, repo workflow pointers, runtime notes. Must not contain bare `{` / `}`. |
 
 ## Fresh box
 
