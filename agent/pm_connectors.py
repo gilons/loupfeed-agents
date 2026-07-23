@@ -22,6 +22,8 @@ import time
 from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
+from .connector_auth import connector_registry, get_access_token
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_ATLASSIAN_MCP_URL = "https://mcp.atlassian.com/v1/mcp"
@@ -34,29 +36,40 @@ _FAILURE_TTL_SECONDS = 60
 _cache: tuple[float, float, list[BaseTool]] | None = None  # (at, ttl, tools)
 
 
-def _connections() -> dict[str, dict]:
-    connections: dict[str, dict] = {}
-    url = os.environ.get("ATLASSIAN_MCP_URL", DEFAULT_ATLASSIAN_MCP_URL)
+def _fallback_headers(name: str) -> dict[str, str] | None:
+    """Service-account fallback (env) — the platform policy is MCP OAuth 2.1
+    via the token store; these envs exist for headless/CI deployments only."""
+    if name != "atlassian":
+        return None
     bearer = os.environ.get("ATLASSIAN_MCP_BEARER", "")
     email = os.environ.get("ATLASSIAN_EMAIL", "")
     api_token = os.environ.get("ATLASSIAN_API_TOKEN", "")
-    headers: dict[str, str] | None = None
     if bearer:
-        headers = {"Authorization": f"Bearer {bearer}"}
-    elif email and api_token:
+        return {"Authorization": f"Bearer {bearer}"}
+    if email and api_token:
         basic = base64.b64encode(f"{email}:{api_token}".encode()).decode()
-        headers = {"Authorization": f"Basic {basic}"}
-    if headers is not None:
-        connections["atlassian"] = {
-            "transport": "streamable_http",
-            "url": url,
-            "headers": headers,
-        }
+        return {"Authorization": f"Basic {basic}"}
+    return None
+
+
+async def _connections() -> dict[str, dict]:
+    connections: dict[str, dict] = {}
+    for name, url in connector_registry().items():
+        oauth_token = await get_access_token(name)
+        headers = (
+            {"Authorization": f"Bearer {oauth_token}"} if oauth_token else _fallback_headers(name)
+        )
+        if headers is not None:
+            connections[name] = {
+                "transport": "streamable_http",
+                "url": url,
+                "headers": headers,
+            }
     return connections
 
 
 def connector_names() -> list[str]:
-    return sorted(_connections())
+    return sorted(connector_registry())
 
 
 async def load_connector_tools() -> list[BaseTool]:
@@ -66,7 +79,7 @@ async def load_connector_tools() -> list[BaseTool]:
     if _cache is not None and now - _cache[0] < _cache[1]:
         return _cache[2]
 
-    connections = _connections()
+    connections = await _connections()
     if not connections:
         logger.info(
             "pm: no MCP connectors configured "

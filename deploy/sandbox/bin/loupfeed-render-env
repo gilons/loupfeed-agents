@@ -24,6 +24,8 @@ TMP=$(mktemp)
   echo "SANDBOX_TYPE=local"
   echo "LOCAL_SANDBOX_ROOT_DIR=/srv/agent-workspace"
   echo "GIT_TERMINAL_PROMPT=0"
+  echo "# --- Connector token store ---"
+  echo "TOKEN_ENCRYPTION_KEY=$(get TOKEN_ENCRYPTION_KEY)"
   echo "# --- MCP connectors (optional; pm graph) ---"
   echo "ATLASSIAN_EMAIL=$(get ATLASSIAN_EMAIL)"
   echo "ATLASSIAN_API_TOKEN=$(get ATLASSIAN_API_TOKEN)"
