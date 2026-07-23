@@ -63,6 +63,14 @@ def _record_path(connector: str) -> Path:
     return _store_dir() / f"{connector}.json"
 
 
+async def _aload_record(connector: str) -> dict | None:
+    return await asyncio.to_thread(_load_record, connector)
+
+
+async def _asave_record(connector: str, record: dict) -> None:
+    await asyncio.to_thread(_save_record, connector, record)
+
+
 def _load_record(connector: str) -> dict | None:
     try:
         return json.loads(_record_path(connector).read_text())
@@ -136,7 +144,7 @@ async def _ensure_client_registration(
     connector: str, mcp_url: str, redirect_uri: str, meta: dict
 ) -> str:
     """Return a client_id, registering dynamically (public client) if needed."""
-    record = _load_record(connector) or {}
+    record = await _aload_record(connector) or {}
     client = record.get("client") or {}
     if client.get("client_id") and redirect_uri in (client.get("redirect_uris") or []):
         return client["client_id"]
@@ -161,7 +169,7 @@ async def _ensure_client_registration(
         "redirect_uris": data.get("redirect_uris", [redirect_uri]),
     }
     record["mcp_url"] = mcp_url
-    _save_record(connector, record)
+    await _asave_record(connector, record)
     logger.info("connector %s: registered OAuth client", connector)
     return data["client_id"]
 
@@ -236,7 +244,7 @@ async def finish_auth(state: str, code: str) -> str:
         tokens = resp.json()
 
     connector = pending["connector"]
-    record = _load_record(connector) or {}
+    record = await _aload_record(connector) or {}
     record.update(
         {
             "mcp_url": pending["mcp_url"],
@@ -250,14 +258,14 @@ async def finish_auth(state: str, code: str) -> str:
         }
     )
     record.setdefault("client", {})["client_id"] = pending["client_id"]
-    _save_record(connector, record)
+    await _asave_record(connector, record)
     logger.info("connector %s: OAuth connection stored", connector)
     return connector
 
 
 async def get_access_token(connector: str) -> str | None:
     """Valid access token for a connected connector (refreshing as needed)."""
-    record = _load_record(connector)
+    record = await _aload_record(connector)
     if not record or not record.get("access_token_enc"):
         return None
 
@@ -271,7 +279,7 @@ async def get_access_token(connector: str) -> str | None:
 
     async with _lock:
         # Re-read inside the lock in case another task refreshed first.
-        record = _load_record(connector) or record
+        record = await _aload_record(connector) or record
         if time.time() < float(record.get("expires_at") or 0) - _REFRESH_SKEW_SECONDS:
             return decrypt_token(record["access_token_enc"])
         form = {
@@ -293,7 +301,7 @@ async def get_access_token(connector: str) -> str | None:
         if tokens.get("refresh_token"):
             record["refresh_token_enc"] = encrypt_token(tokens["refresh_token"])
         record["expires_at"] = time.time() + float(tokens.get("expires_in") or 3600)
-        _save_record(connector, record)
+        await _asave_record(connector, record)
         logger.info("connector %s: access token refreshed", connector)
         return tokens["access_token"]
 

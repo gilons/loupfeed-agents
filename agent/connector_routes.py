@@ -14,6 +14,7 @@ registered with the provider.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
@@ -34,7 +35,7 @@ def _public_base(request: Request) -> str:
 
 @router.get("/status")
 async def connectors_status() -> JSONResponse:
-    return JSONResponse(connection_status())
+    return JSONResponse(await asyncio.to_thread(connection_status))
 
 
 @router.get("/{connector}/start")
