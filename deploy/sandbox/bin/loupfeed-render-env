@@ -24,6 +24,10 @@ TMP=$(mktemp)
   echo "SANDBOX_TYPE=local"
   echo "LOCAL_SANDBOX_ROOT_DIR=/srv/agent-workspace"
   echo "GIT_TERMINAL_PROMPT=0"
+  echo "# --- MCP connectors (optional; pm graph) ---"
+  echo "ATLASSIAN_EMAIL=$(get ATLASSIAN_EMAIL)"
+  echo "ATLASSIAN_API_TOKEN=$(get ATLASSIAN_API_TOKEN)"
+  echo "ATLASSIAN_MCP_BEARER=$(get ATLASSIAN_MCP_BEARER)"
   echo "# --- Org overlay (org-specific values live outside the platform) ---"
   if [ -r /etc/loupfeed/agent.env ]; then cat /etc/loupfeed/agent.env; fi
   echo "# --- GitHub App ---"

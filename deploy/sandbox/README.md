@@ -36,6 +36,7 @@ the box instead of a hosted sandbox provider.
 | `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` | your GitHub App |
 | `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_INSTALLATION_ID` | webhook + installation |
 | `GITHUB_APP_PRIVATE_KEY_B64` | App private key, base64-encoded PEM |
+| `ATLASSIAN_EMAIL`, `ATLASSIAN_API_TOKEN` | optional - the pm graph's Rovo MCP connector (Basic auth); or `ATLASSIAN_MCP_BEARER` for a service-account key |
 
 `LANGSMITH_API_KEY_PROD=bot-token-only-mode` is rendered as a deliberate dummy:
 it flips `is_bot_token_only_mode()` so runs authenticate with the GitHub App
