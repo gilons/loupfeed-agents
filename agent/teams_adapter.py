@@ -52,6 +52,8 @@ _BOTFRAMEWORK_ISSUER = "https://api.botframework.com"
 _jwks_client: PyJWKClient | None = None
 _jwks_client_at = 0.0
 _connector_token: dict | None = None  # {value, expires_at}
+_member_cache: dict[str, tuple[float, dict]] = {}  # f"{conv}:{user}" -> (at, member)
+_MEMBER_CACHE_TTL = 3600.0
 
 
 def _app_id() -> str:
@@ -159,6 +161,38 @@ async def _send_typing(activity: dict) -> None:
     await _post_activity(activity["serviceUrl"], activity["conversation"]["id"], payload)
 
 
+async def _get_sender_member(activity: dict) -> dict:
+    """Sender's Teams member record (name, email/UPN, aadObjectId), cached.
+
+    Identity P1: this is the zero-friction tier of the platform identity map —
+    the work email joins Teams users to the user-mappings store (GitHub today,
+    Atlassian accountId in P2).
+    """
+    conv_id = str((activity.get("conversation") or {}).get("id") or "")
+    user_id = str((activity.get("from") or {}).get("id") or "")
+    if not conv_id or not user_id:
+        return {}
+    key = f"{conv_id}:{user_id}"
+    cached = _member_cache.get(key)
+    if cached and time.time() - cached[0] < _MEMBER_CACHE_TTL:
+        return cached[1]
+    try:
+        token = await _get_connector_token()
+        url = (
+            f"{activity['serviceUrl'].rstrip('/')}/v3/conversations/"
+            f"{conv_id}/members/{user_id}"
+        )
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.get(url, headers={"Authorization": f"Bearer {token}"})
+            resp.raise_for_status()
+            member = resp.json()
+    except Exception:
+        logger.warning("teams: member lookup failed for %s", user_id, exc_info=True)
+        member = {}
+    _member_cache[key] = (time.time(), member)
+    return member
+
+
 # ---------------------------------------------------------------------------
 # Thread ⇄ session mapping + message shaping.
 # ---------------------------------------------------------------------------
@@ -204,6 +238,21 @@ async def _process_message(activity: dict) -> None:
 
     await _send_typing(activity)
 
+    member = await _get_sender_member(activity)
+    requester = {
+        "requester_name": str(
+            member.get("name") or ((activity.get("from") or {}).get("name")) or ""
+        ),
+        "requester_email": str(
+            member.get("email") or member.get("userPrincipalName") or ""
+        ),
+        "requester_aad_id": str(
+            member.get("aadObjectId")
+            or ((activity.get("from") or {}).get("aadObjectId"))
+            or ""
+        ),
+    }
+
     thread_id = langgraph_thread_id(activity)
     client = get_client(url=LANGGRAPH_URL)
     await client.threads.create(thread_id=thread_id, if_exists="do_nothing")
@@ -213,7 +262,7 @@ async def _process_message(activity: dict) -> None:
             thread_id,
             PM_GRAPH,
             input={"messages": [{"role": "user", "content": _speaker_labeled(activity, text)}]},
-            config={"configurable": {"teams_thread_key": _thread_key(activity)}},
+            config={"configurable": {"teams_thread_key": _thread_key(activity), **requester}},
         )
     except Exception:
         logger.exception("teams: pm run failed for thread %s", thread_id)

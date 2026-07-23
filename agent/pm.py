@@ -31,6 +31,7 @@ from langchain.agents.middleware import ModelCallLimitMiddleware
 
 from .dashboard.options import SUPPORTED_MODEL_IDS, model_supports_effort
 from .dashboard.team_settings import get_team_default_model
+from .dashboard.user_mappings import login_for_email
 from .middleware import (
     ExcludeToolsMiddleware,
     SanitizeThinkingBlocksMiddleware,
@@ -170,7 +171,31 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
             link = f"{base}/connectors/{name}/start" if base else "(no public URL configured)"
             lines.append(f"- {name}: NOT CONNECTED — connect link: {link}")
     connector_status = "\n".join(lines) if lines else "- (no connectors registered)"
-    system_prompt = PM_PROMPT.format(connector_status=connector_status) + _prompt_extras()
+
+    requester_block = ""
+    requester_name = str(configurable.get("requester_name") or "")
+    requester_email = str(configurable.get("requester_email") or "")
+    if requester_name or requester_email:
+        github_login = None
+        if requester_email:
+            try:
+                github_login = await login_for_email(requester_email)
+            except Exception:
+                logger.warning("pm: user-mapping lookup failed", exc_info=True)
+        parts = [p for p in (requester_name, f"<{requester_email}>" if requester_email else "") if p]
+        line = " ".join(parts)
+        if github_login:
+            line += f" · GitHub: {github_login}"
+        requester_block = (
+            "\n\n### Requester\n"
+            f"The person who sent the latest message: {line}\n"
+            "Use this identity for personal queries (\"my issues\", \"assign to me\") and "
+            "for attributing actions in comments you write."
+        )
+
+    system_prompt = (
+        PM_PROMPT.format(connector_status=connector_status) + requester_block + _prompt_extras()
+    )
 
     return create_deep_agent(
         model=make_model(model_id, **model_kwargs),
