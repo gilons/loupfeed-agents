@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TypedDict
 
 
@@ -16,7 +17,7 @@ class ModelOption(TypedDict):
 SUPPORTED_MODELS: list[ModelOption] = [
     {
         "id": "openai:deepseek/deepseek-v4-pro",
-        "label": "DeepSeek V4 Pro (TensorIX)",
+        "label": "DeepSeek V4 Pro (OpenAI-compatible)",
         "efforts": ["none", "low", "medium", "high", "xhigh", "max"],
         "default_effort": "medium",
         "supports_images": False,
@@ -67,7 +68,9 @@ SUPPORTED_MODELS: list[ModelOption] = [
 
 SUPPORTED_MODEL_IDS: frozenset[str] = frozenset(m["id"] for m in SUPPORTED_MODELS)
 
-DEFAULT_MODEL_ID: str = "openai:deepseek/deepseek-v4-pro"
+# Deployments override the platform default via LLM_MODEL_ID (e.g. an
+# OpenAI-compatible endpoint model); unset keeps the upstream default.
+DEFAULT_MODEL_ID: str = os.environ.get("LLM_MODEL_ID") or "openai:gpt-5.5"
 DEFAULT_MODEL_EFFORT: str = "medium"
 
 

@@ -21,7 +21,8 @@ TMP=$(mktemp)
   echo "SANDBOX_TYPE=local"
   echo "LOCAL_SANDBOX_ROOT_DIR=/srv/agent-workspace"
   echo "GIT_TERMINAL_PROMPT=0"
-  echo "ALLOWED_GITHUB_ORGS=dinolabdev"
+  echo "# --- Org overlay (org-specific values live outside the platform) ---"
+  if [ -r /etc/loupfeed/agent.env ]; then cat /etc/loupfeed/agent.env; fi
   echo "# --- GitHub App ---"
   echo "GITHUB_APP_ID=$(get GITHUB_APP_ID)"
   echo "GITHUB_APP_CLIENT_ID=$(get GITHUB_APP_CLIENT_ID)"

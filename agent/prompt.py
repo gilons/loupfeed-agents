@@ -57,6 +57,19 @@ All code execution and file operations happen in this sandbox environment.
 - If a command times out and needs longer, rerun it by explicitly passing `timeout=<seconds>` to the `execute` tool (e.g. `timeout=600` for 10 minutes)
 """
 
+# Optional org-specific extension of the working-environment guidance
+# (cloud-access conventions, repo-specific workflows, ...) so deployments can
+# customize the agent without forking the platform. Point WORKING_ENV_EXTRA_FILE
+# at a markdown file; a missing file is a no-op. The section is later
+# .format()-ed, so the extras file must not contain bare `{` / `}`.
+_WORKING_ENV_EXTRA_FILE = os.environ.get(
+    "WORKING_ENV_EXTRA_FILE", "/etc/loupfeed/working-env.md"
+)
+try:
+    WORKING_ENV_SECTION += "\n" + Path(_WORKING_ENV_EXTRA_FILE).read_text()
+except OSError:
+    pass
+
 
 TASK_OVERVIEW_SECTION = """---
 
