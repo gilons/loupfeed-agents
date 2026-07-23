@@ -31,9 +31,7 @@ __all__ = [
     "verify_github_signature",
 ]
 
-# Primary handles first; the openswe forms are legacy aliases kept so existing
-# muscle memory and in-flight threads keep working during the transition.
-AGENT_TAGS = ("@loupfeedcode", "@loupfeed", "@openswe", "@open-swe", "@openswe-dev")
+AGENT_TAGS = ("@loupfeedcode", "@loupfeed")
 OPEN_SWE_TAGS = AGENT_TAGS
 UNTRUSTED_GITHUB_COMMENT_OPEN_TAG = "<dangerous-external-untrusted-users-comment>"
 UNTRUSTED_GITHUB_COMMENT_CLOSE_TAG = "</dangerous-external-untrusted-users-comment>"
