@@ -1,4 +1,5 @@
-"""Tools: ``graph_api`` + ``graph_meeting_transcript``. Read-only Microsoft Graph.
+"""Tools: ``graph_api``, ``graph_meeting_transcript``, ``graph_file_content``.
+Read-only Microsoft Graph.
 
 The pm agent is installed into Teams teams/chats/meetings, where resource-
 specific consent (RSC) grants its Entra app read access to that resource's
@@ -10,6 +11,8 @@ path and the planning-system connectors.
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 from typing import Any
 
@@ -19,7 +22,13 @@ from ..utils.msgraph import GRAPH_BASE, get_graph_app_token
 
 _MAX_RESPONSE_CHARS = 60_000
 _MAX_TRANSCRIPT_CHARS = 120_000
+_MAX_FILE_BYTES = 15 * 1024 * 1024
 _TIMEOUT = 30
+
+_TEXT_EXTENSIONS = {
+    "txt", "md", "csv", "tsv", "json", "yaml", "yml", "xml", "html", "htm", "log",
+    "py", "js", "ts", "java", "go", "rb", "sh", "sql", "toml", "ini", "cfg",
+}  # fmt: skip
 
 # Read-oriented Graph roots the pm agent has any business touching.
 _ALLOWED_ROOTS = ("chats", "teams", "groups", "users", "sites", "drives")
@@ -101,6 +110,134 @@ def graph_api(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]
     if len(text) > _MAX_RESPONSE_CHARS:
         return {"status": resp.status_code, "body": text[:_MAX_RESPONSE_CHARS], "truncated": True}
     return {"status": resp.status_code, "body": body}
+
+
+def _extract_file_text(name: str, mime: str, data: bytes) -> tuple[str, str]:
+    """Return ``(kind, text)`` for a downloaded file, or raise ValueError."""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext == "pdf" or mime == "application/pdf":
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(data))
+        pages = [page.extract_text() or "" for page in reader.pages]
+        return "pdf", "\n\n".join(pages).strip()
+    if ext == "docx" or mime.endswith("wordprocessingml.document"):
+        from docx import Document
+
+        doc = Document(io.BytesIO(data))
+        parts = [p.text for p in doc.paragraphs if p.text.strip()]
+        for table in doc.tables:
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells]
+                if any(cells):
+                    parts.append(" | ".join(cells))
+        return "docx", "\n".join(parts)
+    if mime.startswith("text/") or ext in _TEXT_EXTENSIONS:
+        return "text", data.decode("utf-8", errors="replace")
+    raise ValueError(
+        f"unsupported file type ({name or mime or 'unknown'}); "
+        "readable types: pdf, docx, and plain-text formats"
+    )
+
+
+def graph_file_content(url: str = "", drive_id: str = "", item_id: str = "") -> dict[str, Any]:
+    """Download a file shared in Teams/SharePoint and return its readable text.
+
+    Use this to actually READ a shared document instead of only listing it.
+    Handles PDF, DOCX, and plain-text formats (md, csv, json, code, ...).
+
+    Pass ONE of:
+    - ``url`` — the file's web link, e.g. an attachment's ``contentUrl`` from a
+      channel/chat message or a SharePoint link someone pasted.
+    - ``drive_id`` + ``item_id`` — from a Graph drive listing
+      (``/groups/{team}/drive/root/children``).
+
+    Files in a team's SharePoint library are readable wherever the app is
+    installed. Files shared in private/group chats live in the sharer's
+    personal OneDrive and may be denied (403) unless the tenant granted
+    ``Files.Read.All`` — report that instead of retrying.
+
+    Returns:
+        ``{"ok": True, "name": str, "kind": "pdf|docx|text", "size": int,
+        "text": str}`` (``truncated: True`` when capped) or
+        ``{"ok": False, "reason": str}``.
+    """
+    if not (url or (drive_id and item_id)):
+        return {"ok": False, "reason": "pass url, or drive_id and item_id"}
+    try:
+        if not (drive_id and item_id):
+            share_id = "u!" + base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
+            item_resp = _get(f"/shares/{share_id}/driveItem")
+            if item_resp.status_code != 200:
+                return {
+                    "ok": False,
+                    "reason": (
+                        f"could not resolve the file link ({item_resp.status_code}): "
+                        f"{item_resp.text[:300]}"
+                    ),
+                }
+            item = item_resp.json()
+            drive_id = ((item.get("parentReference") or {}).get("driveId")) or ""
+            item_id = item.get("id") or ""
+            if not drive_id or not item_id:
+                return {"ok": False, "reason": "link resolved but not to a drive file"}
+        else:
+            item_resp = _get(f"/drives/{drive_id}/items/{item_id}")
+            if item_resp.status_code != 200:
+                return {
+                    "ok": False,
+                    "reason": (
+                        f"could not read file metadata ({item_resp.status_code}): "
+                        f"{item_resp.text[:300]}"
+                    ),
+                }
+            item = item_resp.json()
+
+        name = str(item.get("name") or "")
+        mime = str(((item.get("file") or {}).get("mimeType")) or "")
+        size = int(item.get("size") or 0)
+        if size > _MAX_FILE_BYTES:
+            return {
+                "ok": False,
+                "reason": f"file too large ({size} bytes; limit {_MAX_FILE_BYTES})",
+            }
+
+        content_resp = _get(f"/drives/{drive_id}/items/{item_id}/content")
+        if content_resp.status_code != 200:
+            return {
+                "ok": False,
+                "reason": (
+                    f"could not download the file ({content_resp.status_code}): "
+                    f"{content_resp.text[:300]}"
+                ),
+            }
+        data = content_resp.content
+        if len(data) > _MAX_FILE_BYTES:
+            return {
+                "ok": False,
+                "reason": f"file too large ({len(data)} bytes; limit {_MAX_FILE_BYTES})",
+            }
+
+        try:
+            kind, text = _extract_file_text(name, mime, data)
+        except ValueError as exc:
+            return {"ok": False, "reason": str(exc)}
+        except Exception as exc:  # noqa: BLE001 — corrupt/odd files must not crash the run
+            return {"ok": False, "reason": f"could not parse {name or 'file'}: {exc}"}
+
+        truncated = len(text) > _MAX_RESPONSE_CHARS
+        return {
+            "ok": True,
+            "name": name,
+            "kind": kind,
+            "size": size or len(data),
+            "text": text[:_MAX_RESPONSE_CHARS],
+            **({"truncated": True} if truncated else {}),
+        }
+    except RuntimeError as exc:
+        return {"ok": False, "reason": str(exc)}
+    except requests.RequestException as exc:
+        return {"ok": False, "reason": f"request failed: {exc}"}
 
 
 def graph_meeting_transcript(chat_id: str) -> dict[str, Any]:

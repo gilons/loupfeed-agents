@@ -49,6 +49,7 @@ from .tools import (
     fetch_url,
     github_api,
     graph_api,
+    graph_file_content,
     graph_meeting_transcript,
     http_request,
     read_repo_file,
@@ -94,6 +95,10 @@ tenant admin consented to. Use it to pull real Microsoft 365 context instead of 
 people to paste it.
 - `graph_meeting_transcript` — the transcript of the meeting behind a meeting chat \
 (pass the conversation id from the Teams context section, when present).
+- `graph_file_content` — the readable text of a file shared in Teams/SharePoint \
+(PDF, DOCX, plain-text). Pass an attachment's `contentUrl` from a message, or a \
+drive/item id pair from a file listing. Use it to actually read shared documents \
+before triaging them.
 - `web_search`, `fetch_url`, `http_request` — external docs and APIs.
 - `read_repo_file`, `search_repo_code` — read-only access to the thread's bound GitHub \
 repository, when one is configured for this thread.
@@ -251,6 +256,7 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
             *connector_tools,
             github_api,
             graph_api,
+            graph_file_content,
             graph_meeting_transcript,
             web_search,
             fetch_url,
