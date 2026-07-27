@@ -212,6 +212,56 @@ def langgraph_thread_id(activity: dict) -> str:
 _MENTION_RE = re.compile(r"<at[^>]*>.*?</at>", re.DOTALL)
 
 
+def _mentions_bot(activity: dict) -> bool:
+    """Whether this activity explicitly @mentions us.
+
+    Teams ids in mention entities are channel-prefixed (``28:<app-id>``), so
+    compare on a suffix match against both the recipient id and the app id.
+    """
+    wanted = {
+        str((activity.get("recipient") or {}).get("id") or ""),
+        _app_id(),
+    }
+    wanted = {w for w in wanted if w}
+    for entity in activity.get("entities") or []:
+        if str(entity.get("type") or "").lower() != "mention":
+            continue
+        mentioned_id = str(((entity.get("mentioned") or {}).get("id")) or "")
+        if not mentioned_id:
+            continue
+        if any(mentioned_id == w or mentioned_id.endswith(f":{w}") for w in wanted):
+            return True
+    return False
+
+
+async def _thread_exists(thread_id: str) -> bool:
+    """Whether we already have a session for this Teams thread."""
+    try:
+        await get_client(url=LANGGRAPH_URL).threads.get(thread_id)
+        return True
+    except Exception:
+        return False
+
+
+async def _is_addressed_to_us(activity: dict) -> bool:
+    """Gate every inbound message: only act when the message is meant for us.
+
+    RSC (``ChannelMessage.Read.Group``) makes Teams deliver *every* channel
+    message to this endpoint, not just mentions — without this gate the agent
+    answers ordinary team chatter. Rules:
+
+    - 1:1 chat with the agent: always ours, no mention needed.
+    - Anywhere else (channel, group chat, meeting chat): an explicit @mention,
+      or a message in a thread we're already conversing in, so follow-ups don't
+      need to re-tag us.
+    """
+    if str(((activity.get("conversation") or {}).get("conversationType")) or "") == "personal":
+        return True
+    if _mentions_bot(activity):
+        return True
+    return await _thread_exists(langgraph_thread_id(activity))
+
+
 def _clean_text(activity: dict) -> str:
     text = _MENTION_RE.sub("", str(activity.get("text") or ""))
     return re.sub(r"\s+", " ", text).strip()
@@ -256,6 +306,10 @@ def _graph_context(activity: dict) -> dict:
 
 
 async def _process_message(activity: dict) -> None:
+    if not await _is_addressed_to_us(activity):
+        # Ordinary team chatter — stay silent (no typing indicator, no run).
+        return
+
     text = _clean_text(activity)
     if not text:
         return
