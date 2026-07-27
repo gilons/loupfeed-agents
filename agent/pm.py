@@ -29,6 +29,7 @@ warnings.filterwarnings("ignore", message=".*Pydantic V1.*", category=UserWarnin
 from deepagents import create_deep_agent
 from langchain.agents.middleware import ModelCallLimitMiddleware
 
+from .connector_auth import connection_status
 from .dashboard.options import SUPPORTED_MODEL_IDS, model_supports_effort
 from .dashboard.team_settings import get_team_default_model
 from .dashboard.user_mappings import login_for_email
@@ -38,7 +39,6 @@ from .middleware import (
     SanitizeToolInputsMiddleware,
     ToolErrorMiddleware,
 )
-from .connector_auth import connection_status
 from .pm_connectors import load_connector_tools
 from .server import (
     DEFAULT_LLM_MAX_TOKENS,
@@ -48,6 +48,8 @@ from .server import (
 from .tools import (
     fetch_url,
     github_api,
+    graph_api,
+    graph_meeting_transcript,
     http_request,
     read_repo_file,
     search_repo_code,
@@ -85,6 +87,13 @@ Connector state right now:
 (sees private repos, org membership, issues, PRs, commits). For ANY GitHub question — \
 membership, usernames, repos, activity — use this tool; never guess or web-search GitHub \
 facts.
+- `graph_api` — read-only Microsoft Graph (Microsoft 365) access as this Teams app. \
+Reads messages, members, meeting details, and files in the teams/chats/meetings where \
+the app is installed, plus directory (people, org chart) and SharePoint reads the \
+tenant admin consented to. Use it to pull real Microsoft 365 context instead of asking \
+people to paste it.
+- `graph_meeting_transcript` — the transcript of the meeting behind a meeting chat \
+(pass the conversation id from the Teams context section, when present).
 - `web_search`, `fetch_url`, `http_request` — external docs and APIs.
 - `read_repo_file`, `search_repo_code` — read-only access to the thread's bound GitHub \
 repository, when one is configured for this thread.
@@ -98,6 +107,11 @@ with the issue key / page title and its URL.
 - **Triage ideas properly.** When asked to triage an idea from a discussion: extract the \
 core idea (problem, proposal, decisions, open questions), dedupe against the existing \
 backlog, then create or enrich the right item — and cite where the idea came from.
+- **Ground triage in what you actually read.** When triaging a meeting or conversation, \
+first read the real material (transcript via `graph_meeting_transcript`, messages and \
+shared files via `graph_api`) and quote or reference the specific statements and \
+decisions each idea came from. Never invent transcript content; if you couldn't read \
+something, say so.
 - **Personal queries need the right person.** For "my issues"-style questions, resolve the \
 requester (from speaker labels or thread context) and scope queries to them.
 - **Stay inside the thread's register.** Replies are chat messages: short, skimmable, \
@@ -187,19 +201,47 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
                 github_login = await login_for_email(requester_email)
             except Exception:
                 logger.warning("pm: user-mapping lookup failed", exc_info=True)
-        parts = [p for p in (requester_name, f"<{requester_email}>" if requester_email else "") if p]
+        parts = [
+            p for p in (requester_name, f"<{requester_email}>" if requester_email else "") if p
+        ]
         line = " ".join(parts)
         if github_login:
             line += f" · GitHub: {github_login}"
         requester_block = (
             "\n\n### Requester\n"
             f"The person who sent the latest message: {line}\n"
-            "Use this identity for personal queries (\"my issues\", \"assign to me\") and "
+            'Use this identity for personal queries ("my issues", "assign to me") and '
             "for attributing actions in comments you write."
         )
 
+    teams_block = ""
+    conversation_id = str(configurable.get("teams_conversation_id") or "")
+    if conversation_id:
+        conversation_type = str(configurable.get("teams_conversation_type") or "")
+        lines = [
+            f"- conversation id (use with `graph_api` / `graph_meeting_transcript`): "
+            f"`{conversation_id}`",
+            f"- conversation type: {conversation_type or 'unknown'}",
+        ]
+        team_group_id = str(configurable.get("teams_team_group_id") or "")
+        if team_group_id:
+            lines.append(f"- team group id (use as `{{team-group-id}}`): `{team_group_id}`")
+        if configurable.get("teams_meeting_id") or conversation_id.startswith("19:meeting_"):
+            lines.append(
+                "- this is a MEETING chat: `graph_meeting_transcript` with the conversation "
+                "id above reads the call transcript; `/chats/{id}/messages` reads the "
+                "meeting chat."
+            )
+        teams_block = (
+            "\n\n### Teams context\nThis conversation comes from Microsoft Teams:\n"
+            + "\n".join(lines)
+        )
+
     system_prompt = (
-        PM_PROMPT.format(connector_status=connector_status) + requester_block + _prompt_extras()
+        PM_PROMPT.format(connector_status=connector_status)
+        + requester_block
+        + teams_block
+        + _prompt_extras()
     )
 
     return create_deep_agent(
@@ -208,6 +250,8 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
         tools=[
             *connector_tools,
             github_api,
+            graph_api,
+            graph_meeting_transcript,
             web_search,
             fetch_url,
             http_request,

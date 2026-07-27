@@ -1,6 +1,7 @@
 from .add_finding import add_finding
 from .fetch_url import fetch_url
 from .github_api import github_api
+from .graph_api import graph_api, graph_meeting_transcript
 from .http_request import http_request
 from .linear_comment import linear_comment
 from .linear_create_issue import linear_create_issue
@@ -27,6 +28,8 @@ __all__ = [
     "add_finding",
     "fetch_url",
     "github_api",
+    "graph_api",
+    "graph_meeting_transcript",
     "http_request",
     "linear_comment",
     "linear_create_issue",
