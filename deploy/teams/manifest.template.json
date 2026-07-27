@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
   "manifestVersion": "1.17",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "id": "${TEAMS_APP_ID}",
   "developer": {
     "name": "loupfeed",
@@ -36,5 +36,28 @@
   ],
   "validDomains": [
     "d3mlm0z8iw9b1o.cloudfront.net"
-  ]
+  ],
+  "webApplicationInfo": {
+    "id": "${TEAMS_APP_ID}",
+    "resource": "https://RscBasedStoreApp"
+  },
+  "authorization": {
+    "permissions": {
+      "resourceSpecific": [
+        { "name": "ChannelMessage.Read.Group", "type": "Application" },
+        { "name": "ChannelSettings.Read.Group", "type": "Application" },
+        { "name": "TeamSettings.Read.Group", "type": "Application" },
+        { "name": "TeamMember.Read.Group", "type": "Application" },
+        { "name": "ChannelMeeting.ReadBasic.Group", "type": "Application" },
+        { "name": "ChannelMeetingTranscript.Read.Group", "type": "Application" },
+        { "name": "ChannelMeetingParticipant.Read.Group", "type": "Application" },
+        { "name": "ChatMessage.Read.Chat", "type": "Application" },
+        { "name": "ChatMember.Read.Chat", "type": "Application" },
+        { "name": "ChatSettings.Read.Chat", "type": "Application" },
+        { "name": "OnlineMeeting.ReadBasic.Chat", "type": "Application" },
+        { "name": "OnlineMeetingTranscript.Read.Chat", "type": "Application" },
+        { "name": "OnlineMeetingParticipant.Read.Chat", "type": "Application" }
+      ]
+    }
+  }
 }

@@ -35,7 +35,6 @@ from fastapi import APIRouter, BackgroundTasks, Request, Response
 from jwt import PyJWKClient
 from langgraph_sdk import get_client
 
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["teams"])
@@ -178,10 +177,7 @@ async def _get_sender_member(activity: dict) -> dict:
         return cached[1]
     try:
         token = await _get_connector_token()
-        url = (
-            f"{activity['serviceUrl'].rstrip('/')}/v3/conversations/"
-            f"{conv_id}/members/{user_id}"
-        )
+        url = f"{activity['serviceUrl'].rstrip('/')}/v3/conversations/{conv_id}/members/{user_id}"
         async with httpx.AsyncClient(timeout=15) as http:
             resp = await http.get(url, headers={"Authorization": f"Bearer {token}"})
             resp.raise_for_status()
@@ -226,6 +222,34 @@ def _speaker_labeled(activity: dict, text: str) -> str:
     return f"{name}: {text}" if name else text
 
 
+def _graph_context(activity: dict) -> dict:
+    """Microsoft Graph ids for the conversation, for the pm graph's read tools.
+
+    The base conversation id (without the ``;messageid=`` thread suffix) is the
+    Graph chat id for 1:1/group/meeting chats and the channel id for channels;
+    ``channelData`` carries the team's AAD group id and, inside meeting chats,
+    the meeting id. All read paths these unlock are RSC-scoped — they only work
+    where the Teams app is actually installed.
+    """
+    conversation = activity.get("conversation") or {}
+    conv_id = str(conversation.get("id") or "").split(";messageid=")[0]
+    channel_data = activity.get("channelData") or {}
+    context = {
+        "teams_conversation_id": conv_id,
+        "teams_conversation_type": str(conversation.get("conversationType") or ""),
+        "teams_tenant_id": str(
+            ((channel_data.get("tenant") or {}).get("id")) or conversation.get("tenantId") or ""
+        ),
+    }
+    team_group_id = str(((channel_data.get("team") or {}).get("aadGroupId")) or "")
+    if team_group_id:
+        context["teams_team_group_id"] = team_group_id
+    meeting_id = str(((channel_data.get("meeting") or {}).get("id")) or "")
+    if meeting_id:
+        context["teams_meeting_id"] = meeting_id
+    return context
+
+
 # ---------------------------------------------------------------------------
 # The run.
 # ---------------------------------------------------------------------------
@@ -243,13 +267,9 @@ async def _process_message(activity: dict) -> None:
         "requester_name": str(
             member.get("name") or ((activity.get("from") or {}).get("name")) or ""
         ),
-        "requester_email": str(
-            member.get("email") or member.get("userPrincipalName") or ""
-        ),
+        "requester_email": str(member.get("email") or member.get("userPrincipalName") or ""),
         "requester_aad_id": str(
-            member.get("aadObjectId")
-            or ((activity.get("from") or {}).get("aadObjectId"))
-            or ""
+            member.get("aadObjectId") or ((activity.get("from") or {}).get("aadObjectId")) or ""
         ),
     }
 
@@ -262,11 +282,19 @@ async def _process_message(activity: dict) -> None:
             thread_id,
             PM_GRAPH,
             input={"messages": [{"role": "user", "content": _speaker_labeled(activity, text)}]},
-            config={"configurable": {"teams_thread_key": _thread_key(activity), **requester}},
+            config={
+                "configurable": {
+                    "teams_thread_key": _thread_key(activity),
+                    **requester,
+                    **_graph_context(activity),
+                }
+            },
         )
     except Exception:
         logger.exception("teams: pm run failed for thread %s", thread_id)
-        await _reply(activity, "Something went wrong while working on that — check the platform logs.")
+        await _reply(
+            activity, "Something went wrong while working on that — check the platform logs."
+        )
         return
 
     reply_text = _last_ai_text(result) or "(no reply produced)"
@@ -282,7 +310,10 @@ def _last_ai_text(result: object) -> str:
     for message in reversed(messages):
         if not isinstance(message, dict):
             continue
-        if message.get("type") not in ("ai", "AIMessageChunk") and message.get("role") != "assistant":
+        if (
+            message.get("type") not in ("ai", "AIMessageChunk")
+            and message.get("role") != "assistant"
+        ):
             continue
         content = message.get("content")
         if isinstance(content, str) and content.strip():
