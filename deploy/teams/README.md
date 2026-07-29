@@ -28,10 +28,19 @@ The Teams adapter is served by the platform at `POST /webhooks/teams`
 
 Private and shared channels do **not** inherit the team's apps: the app must be
 installed in the host team *and* added to each such channel explicitly
-(channel → `+` → Apps). For the app to even appear in that picker, the manifest
-must declare readiness — this repo sets `"supportsChannelFeatures": "tier1"`
-(requires manifest v1.25). Without it Teams shows "No Results Found" when you
-search for the app in a private channel.
+(channel → `+` → Apps). Two manifest requirements, and both are needed:
+
+1. `"supportsChannelFeatures": "tier1"` (requires manifest v1.25) — declares the
+   app is ready for these channels.
+2. A `configurableTabs` entry. That picker is the **tab** gallery: it only lists
+   apps that can add a tab, so a bot-only manifest can never be installed into a
+   private channel — searching for it returns "No Results Found". `agent/teams_tab.py`
+   serves a one-click config page purely to satisfy this; adding the tab is what
+   installs the app (bot included) into the channel.
+
+Symptom when only the bot is declared: `@loupfeed` still autocompletes in the
+private channel's compose box (Teams offers bots installed in the parent team),
+the message posts, and nothing is ever delivered to the bot endpoint.
 
 Caveats that still apply there: each private/shared channel has **its own
 SharePoint site** (use `GET /teams/{teamId}/channels/{channelId}/filesFolder`,
