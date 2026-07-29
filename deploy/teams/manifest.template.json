@@ -41,7 +41,7 @@
       "canUpdateConfiguration": false,
       "scopes": [
         "team",
-        "groupchat"
+        "groupChat"
       ],
       "context": [
         "channelTab",
