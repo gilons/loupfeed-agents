@@ -251,14 +251,24 @@ async def _is_addressed_to_us(activity: dict) -> bool:
     answers ordinary team chatter. Rules:
 
     - 1:1 chat with the agent: always ours, no mention needed.
-    - Anywhere else (channel, group chat, meeting chat): an explicit @mention,
-      or a message in a thread we're already conversing in, so follow-ups don't
-      need to re-tag us.
+    - Channel thread we're already conversing in: ours, so follow-ups don't need
+      to re-tag us.
+    - Anywhere else (channel top-level, group chat, meeting chat): an explicit
+      @mention is required.
+
+    The follow-up exemption is deliberately restricted to real threads. Only
+    channel conversations thread in Teams, and a thread reply carries
+    ``;messageid=`` in its conversation id. Group and meeting chats are flat, so
+    one session covers the whole chat — granting the exemption there makes the
+    first mention turn into a standing subscription to every later message.
     """
-    if str(((activity.get("conversation") or {}).get("conversationType")) or "") == "personal":
+    conversation = activity.get("conversation") or {}
+    if str(conversation.get("conversationType") or "") == "personal":
         return True
     if _mentions_bot(activity):
         return True
+    if ";messageid=" not in str(conversation.get("id") or ""):
+        return False
     return await _thread_exists(langgraph_thread_id(activity))
 
 
