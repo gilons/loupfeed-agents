@@ -112,3 +112,32 @@ async def test_followup_in_engaged_thread_needs_no_mention(_engaged):
 async def test_meeting_chatter_is_ignored(_no_sessions):
     activity = _activity(conv_type="groupChat", conv_id="19:meeting_abc@thread.v2")
     assert await teams_adapter._is_addressed_to_us(activity) is False
+
+
+@pytest.mark.asyncio
+async def test_group_chat_chatter_is_ignored_even_when_engaged(_engaged):
+    """Group chats are flat: one session covers the whole chat.
+
+    Granting the engaged-thread exemption here turned the first mention into a
+    standing subscription, so the bot answered every later message.
+    """
+    activity = _activity(conv_type="groupChat", conv_id="19:022f5284d7c9@thread.v2")
+    assert await teams_adapter._is_addressed_to_us(activity) is False
+
+
+@pytest.mark.asyncio
+async def test_group_chat_mention_is_still_handled(_engaged):
+    activity = _activity(
+        conv_type="groupChat",
+        conv_id="19:022f5284d7c9@thread.v2",
+        entities=[_mention(f"28:{BOT_APP_ID}")],
+    )
+    assert await teams_adapter._is_addressed_to_us(activity) is True
+
+
+@pytest.mark.asyncio
+async def test_channel_top_level_chatter_is_ignored_even_when_engaged(_engaged):
+    """A top-level channel message keys per-message, so an existing session for
+    some other thread must not make unrelated chatter ours."""
+    activity = _activity(conv_type="channel", conv_id="19:chan@thread.tacv2")
+    assert await teams_adapter._is_addressed_to_us(activity) is False
