@@ -21,7 +21,32 @@ The Teams adapter is served by the platform at `POST /webhooks/teams`
    `color.png` (192×192) and `outline.png` (32×32), zip the three files, and
    upload via Teams → Apps → Manage your apps → Upload an app (or the org app
    catalog). **Re-uploads are rejected unless the manifest `version` is
-   bumped.**
+   bumped.** Always add/update the app from **Teams on the web** — the desktop
+   client serves a cached package and grants nothing.
+
+### Private and shared channels
+
+Private and shared channels do **not** inherit the team's apps: the app must be
+installed in the host team *and* added to each such channel explicitly
+(channel → `+` → Apps). Two manifest requirements, and both are needed:
+
+1. `"supportsChannelFeatures": "tier1"` (requires manifest v1.25) — declares the
+   app is ready for these channels.
+2. A `configurableTabs` entry. That picker is the **tab** gallery: it only lists
+   apps that can add a tab, so a bot-only manifest can never be installed into a
+   private channel — searching for it returns "No Results Found". `agent/teams_tab.py`
+   serves a one-click config page purely to satisfy this; adding the tab is what
+   installs the app (bot included) into the channel.
+
+Symptom when only the bot is declared: `@loupfeed` still autocompletes in the
+private channel's compose box (Teams offers bots installed in the parent team),
+the message posts, and nothing is ever delivered to the bot endpoint.
+
+Caveats that still apply there: each private/shared channel has **its own
+SharePoint site** (use `GET /teams/{teamId}/channels/{channelId}/filesFolder`,
+never the team drive), channel membership is a subset of the team, and Graph
+**message change-notification subscriptions are blocked** for RSC apps in these
+channels (403) — read messages on demand instead.
 
 ## Microsoft 365 read access (Graph)
 
@@ -42,6 +67,7 @@ no admin consent in Entra:
 | `ChannelMessage.Read.Group` | Read channel messages of the installed team |
 | `ChannelSettings.Read.Group`, `TeamSettings.Read.Group` | Channel/team names & settings |
 | `TeamMember.Read.Group` | Team roster |
+| `ChannelMember.Read.Group` | Channel roster + membership events (needed in private/shared channels, where channel membership ≠ team membership) |
 | `ChannelMeeting.ReadBasic.Group`, `ChannelMeetingTranscript.Read.Group`, `ChannelMeetingParticipant.Read.Group` | Channel-meeting details, transcripts, participants |
 | `ChatMessage.Read.Chat`, `ChatMember.Read.Chat`, `ChatSettings.Read.Chat` | Messages/members/properties of the installed chat |
 | `OnlineMeeting.ReadBasic.Chat`, `OnlineMeetingTranscript.Read.Chat`, `OnlineMeetingParticipant.Read.Chat` | Meeting details, **transcript**, and participants of the meeting behind the installed chat |
