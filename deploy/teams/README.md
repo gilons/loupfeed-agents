@@ -28,18 +28,11 @@ The Teams adapter is served by the platform at `POST /webhooks/teams`
 
 Private and shared channels do **not** inherit the team's apps: the app must be
 installed in the host team *and* added to each such channel explicitly
-(channel → `+` → Apps). Three manifest requirements, and all are needed:
+(channel → `+` → Apps). Two manifest requirements, and both are needed:
 
-1. `"supportedChannelTypes": ["privateChannels", "sharedChannels"]` — the one that
-   actually opts the app into these channel types. Standard channels are implied by
-   team scope; private and shared are not. Without it Teams will still *install* the
-   app into a private channel (channel → Manage channel → Apps shows
-   "Added to Channel: Yes") but delivers **no bot activity** — the mention posts and
-   nothing reaches the messaging endpoint.
-2. `"supportsChannelFeatures": "tier1"` (requires manifest v1.25) — declares which
-   tier of channel features the app supports. Necessary but *not* sufficient; it is
-   not the private-channel switch.
-3. A `configurableTabs` entry. That picker is the **tab** gallery: it only lists
+1. `"supportsChannelFeatures": "tier1"` (requires manifest v1.25) — declares the
+   app is ready for these channels.
+2. A `configurableTabs` entry. That picker is the **tab** gallery: it only lists
    apps that can add a tab, so a bot-only manifest can never be installed into a
    private channel — searching for it returns "No Results Found". `agent/teams_tab.py`
    serves a one-click config page purely to satisfy this; adding the tab is what
