@@ -14,11 +14,14 @@ from __future__ import annotations
 import base64
 import io
 import json
+import logging
 from typing import Any
 
 import requests
 
 from ..utils.msgraph import GRAPH_BASE, get_graph_app_token
+
+logger = logging.getLogger(__name__)
 
 _MAX_RESPONSE_CHARS = 60_000
 _MAX_TRANSCRIPT_CHARS = 120_000
@@ -32,6 +35,19 @@ _TEXT_EXTENSIONS = {
 
 # Read-oriented Graph roots the pm agent has any business touching.
 _ALLOWED_ROOTS = ("chats", "teams", "groups", "users", "sites", "drives")
+
+
+def _fail(reason: str, *, detail: str = "", where: str = "") -> dict[str, Any]:
+    """Return a plain-language failure, keeping the diagnostics in the server log.
+
+    Whatever lands in ``reason`` can end up quoted verbatim to whoever asked, so
+    it stays free of status codes, endpoints, permission names and tracebacks —
+    those read as noise to the asker and as an invitation to go chase the wrong
+    fix. The detail we actually need is logged instead.
+    """
+    if detail:
+        logger.warning("graph tool failed%s: %s", f" [{where}]" if where else "", detail)
+    return {"ok": False, "reason": reason}
 
 
 def _headers() -> dict[str, str] | None:
@@ -83,7 +99,10 @@ def graph_api(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]
     Returns:
         ``{"status": int, "body": <parsed JSON or text>}``. 403 usually means
         the app is not installed in that team/chat (no RSC grant there) or the
-        tenant permission is missing — say so instead of retrying.
+        tenant permission is missing — stop rather than retrying, and tell the
+        asker plainly that you can't reach it. Never quote status codes, Graph
+        paths, permission names or error bodies into a reply: they are logged
+        server-side for us, and they send people chasing the wrong fix.
     """
     if not isinstance(path, str) or not path.startswith("/"):
         return {"status": 0, "body": "path must start with '/' (e.g. /chats/{id}/messages)"}
@@ -95,9 +114,14 @@ def graph_api(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]
     try:
         resp = _get(path, params)
     except RuntimeError as exc:
+        logger.warning("graph_api %s failed: %s: %s", path, type(exc).__name__, exc)
         return {"status": 0, "body": str(exc)}
     except requests.RequestException as exc:
+        logger.warning("graph_api %s failed: %s: %s", path, type(exc).__name__, exc)
         return {"status": 0, "body": f"request failed: {exc}"}
+
+    if resp.status_code >= 400:
+        logger.warning("graph_api %s -> %s: %s", path, resp.status_code, resp.text[:500])
 
     if resp.status_code == 204 or not resp.content:
         return {"status": resp.status_code, "body": ""}
@@ -264,22 +288,20 @@ def graph_meeting_transcript(chat_id: str) -> dict[str, Any]:
     try:
         chat_resp = _get(f"/chats/{chat_id}")
         if chat_resp.status_code in (403, 404):
-            return {
-                "ok": False,
-                "reason": (
-                    "this app is not installed in that meeting chat, so its chat-scoped "
-                    "permissions do not apply there. Ask a participant to add loupfeed to "
-                    "the meeting chat (meeting chat > Apps > loupfeed), then retry. This "
-                    "does NOT need an admin or a tenant-wide grant: the app already holds "
-                    "the chat RSC permissions and installing it in the chat is what "
-                    f"activates them. (Graph said {chat_resp.status_code}.)"
-                ),
-            }
+            return _fail(
+                "I can't reach this meeting's transcript — I don't have access to this "
+                "conversation. Someone will need to add me to it. If you paste the "
+                "transcript or a summary, I can work from that instead.",
+                detail=f"GET /chats/{chat_id} -> {chat_resp.status_code}: {chat_resp.text[:500]}",
+                where="meeting_transcript.chat",
+            )
         if chat_resp.status_code != 200:
-            return {
-                "ok": False,
-                "reason": f"could not read chat ({chat_resp.status_code}): {chat_resp.text[:300]}",
-            }
+            return _fail(
+                "I couldn't read this meeting's conversation, so I can't get to the "
+                "transcript. Paste it or summarise the call and I'll take it from there.",
+                detail=f"GET /chats/{chat_id} -> {chat_resp.status_code}: {chat_resp.text[:500]}",
+                where="meeting_transcript.chat",
+            )
         chat = chat_resp.json()
         meeting_info = chat.get("onlineMeetingInfo") or {}
         join_url = meeting_info.get("joinWebUrl")
@@ -293,33 +315,36 @@ def graph_meeting_transcript(chat_id: str) -> dict[str, Any]:
             params={"$filter": f"JoinWebUrl eq '{escaped}'"},
         )
         if meetings_resp.status_code != 200:
-            return {
-                "ok": False,
-                "reason": (
-                    f"could not resolve the meeting ({meetings_resp.status_code}): "
-                    f"{meetings_resp.text[:300]}"
+            return _fail(
+                "I couldn't look up the meeting behind this conversation, so the "
+                "transcript is out of reach. Paste it and I'll carry on.",
+                detail=(
+                    f"onlineMeetings lookup -> {meetings_resp.status_code}: "
+                    f"{meetings_resp.text[:500]}"
                 ),
-            }
+                where="meeting_transcript.resolve",
+            )
         meetings = meetings_resp.json().get("value") or []
         if not meetings:
-            return {"ok": False, "reason": "no online meeting found for this chat's join link"}
+            return _fail("I couldn't find the meeting behind this conversation.")
         meeting = meetings[0]
 
         transcripts_resp = _get(f"/users/{organizer_id}/onlineMeetings/{meeting['id']}/transcripts")
         if transcripts_resp.status_code != 200:
-            return {
-                "ok": False,
-                "reason": (
-                    f"could not list transcripts ({transcripts_resp.status_code}): "
-                    f"{transcripts_resp.text[:300]}"
+            return _fail(
+                "I can't get to this meeting's transcript. Paste it or summarise the "
+                "call and I'll take it from there.",
+                detail=(
+                    f"list transcripts -> {transcripts_resp.status_code}: "
+                    f"{transcripts_resp.text[:500]}"
                 ),
-            }
+                where="meeting_transcript.list",
+            )
         transcripts = transcripts_resp.json().get("value") or []
         if not transcripts:
-            return {
-                "ok": False,
-                "reason": "no transcript for this meeting (was transcription turned on?)",
-            }
+            return _fail(
+                "There's no transcript for this meeting — transcription may have been off."
+            )
         transcripts.sort(key=lambda t: str(t.get("createdDateTime") or ""), reverse=True)
         newest = transcripts[0]
 
@@ -329,13 +354,13 @@ def graph_meeting_transcript(chat_id: str) -> dict[str, Any]:
             params={"$format": "text/vtt"},
         )
         if content_resp.status_code != 200:
-            return {
-                "ok": False,
-                "reason": (
-                    f"could not fetch transcript content ({content_resp.status_code}): "
-                    f"{content_resp.text[:300]}"
+            return _fail(
+                "I found the transcript but couldn't download it. Paste it and I'll carry on.",
+                detail=(
+                    f"transcript content -> {content_resp.status_code}: {content_resp.text[:500]}"
                 ),
-            }
+                where="meeting_transcript.content",
+            )
         text = content_resp.text
         truncated = len(text) > _MAX_TRANSCRIPT_CHARS
         return {
@@ -347,6 +372,14 @@ def graph_meeting_transcript(chat_id: str) -> dict[str, Any]:
             **({"truncated": True} if truncated else {}),
         }
     except RuntimeError as exc:
-        return {"ok": False, "reason": str(exc)}
+        return _fail(
+            "I'm not able to reach Teams right now.",
+            detail=f"{type(exc).__name__}: {exc}",
+            where="meeting_transcript",
+        )
     except requests.RequestException as exc:
-        return {"ok": False, "reason": f"request failed: {exc}"}
+        return _fail(
+            "I couldn't reach Teams to fetch the transcript. Worth retrying in a moment.",
+            detail=f"{type(exc).__name__}: {exc}",
+            where="meeting_transcript",
+        )
