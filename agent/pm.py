@@ -55,6 +55,7 @@ from .tools import (
     http_request,
     read_repo_file,
     search_repo_code,
+    transcribe_channel_meeting,
     transcribe_recording,
     web_search,
 )
@@ -97,7 +98,10 @@ tenant admin consented to. Use it to pull real Microsoft 365 context instead of 
 people to paste it.
 - `graph_meeting_transcript` — the transcript of the meeting behind a meeting chat \
 (pass the conversation id from the Teams context section, when present).
-- `graph_find_recording` + `transcribe_recording` — for meetings held in a CHANNEL \
+- `transcribe_channel_meeting` — for meetings held in a CHANNEL (standups, reviews), \
+the one-step way to get what was said: it finds the recording and transcribes it. Use this \
+rather than fetching a link in one turn and transcribing in the next — recording links \
+expire within minutes. `graph_find_recording` + `transcribe_recording` remain for \
 (standups, reviews), Teams' own transcript is not reachable: find the recording in the \
 channel's Recordings folder, then transcribe it. Speaker turns come back unnamed, so \
 cross-reference the call's participant list before attributing anything.
@@ -265,6 +269,7 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
             graph_file_content,
             graph_meeting_transcript,
             graph_find_recording,
+            transcribe_channel_meeting,
             transcribe_recording,
             web_search,
             fetch_url,
