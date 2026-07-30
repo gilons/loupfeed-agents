@@ -50,10 +50,12 @@ from .tools import (
     github_api,
     graph_api,
     graph_file_content,
+    graph_find_recording,
     graph_meeting_transcript,
     http_request,
     read_repo_file,
     search_repo_code,
+    transcribe_recording,
     web_search,
 )
 from .utils.github_app import get_github_app_installation_token
@@ -95,6 +97,10 @@ tenant admin consented to. Use it to pull real Microsoft 365 context instead of 
 people to paste it.
 - `graph_meeting_transcript` — the transcript of the meeting behind a meeting chat \
 (pass the conversation id from the Teams context section, when present).
+- `graph_find_recording` + `transcribe_recording` — for meetings held in a CHANNEL \
+(standups, reviews), Teams' own transcript is not reachable: find the recording in the \
+channel's Recordings folder, then transcribe it. Speaker turns come back unnamed, so \
+cross-reference the call's participant list before attributing anything.
 - `graph_file_content` — the readable text of a file shared in Teams/SharePoint \
 (PDF, DOCX, plain-text). Pass an attachment's `contentUrl` from a message, or a \
 drive/item id pair from a file listing. Use it to actually read shared documents \
@@ -258,6 +264,8 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
             graph_api,
             graph_file_content,
             graph_meeting_transcript,
+            graph_find_recording,
+            transcribe_recording,
             web_search,
             fetch_url,
             http_request,
