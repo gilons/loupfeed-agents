@@ -263,6 +263,18 @@ def graph_meeting_transcript(chat_id: str) -> dict[str, Any]:
         return {"ok": False, "reason": "chat_id is required"}
     try:
         chat_resp = _get(f"/chats/{chat_id}")
+        if chat_resp.status_code in (403, 404):
+            return {
+                "ok": False,
+                "reason": (
+                    "this app is not installed in that meeting chat, so its chat-scoped "
+                    "permissions do not apply there. Ask a participant to add loupfeed to "
+                    "the meeting chat (meeting chat > Apps > loupfeed), then retry. This "
+                    "does NOT need an admin or a tenant-wide grant: the app already holds "
+                    "the chat RSC permissions and installing it in the chat is what "
+                    f"activates them. (Graph said {chat_resp.status_code}.)"
+                ),
+            }
         if chat_resp.status_code != 200:
             return {
                 "ok": False,
