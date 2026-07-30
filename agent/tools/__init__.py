@@ -1,7 +1,12 @@
 from .add_finding import add_finding
 from .fetch_url import fetch_url
 from .github_api import github_api
-from .graph_api import graph_api, graph_file_content, graph_meeting_transcript
+from .graph_api import (
+    graph_api,
+    graph_file_content,
+    graph_find_recording,
+    graph_meeting_transcript,
+)
 from .http_request import http_request
 from .linear_comment import linear_comment
 from .linear_create_issue import linear_create_issue
@@ -21,6 +26,7 @@ from .resolve_finding_thread import resolve_finding_thread
 from .search_repo_code import search_repo_code
 from .slack_read_thread_messages import slack_read_thread_messages
 from .slack_thread_reply import slack_thread_reply
+from .transcribe_recording import transcribe_recording
 from .update_finding import update_finding
 from .web_search import web_search
 
@@ -30,7 +36,9 @@ __all__ = [
     "github_api",
     "graph_api",
     "graph_file_content",
+    "graph_find_recording",
     "graph_meeting_transcript",
+    "transcribe_recording",
     "http_request",
     "linear_comment",
     "linear_create_issue",

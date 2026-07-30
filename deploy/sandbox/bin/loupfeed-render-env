@@ -30,6 +30,8 @@ TMP=$(mktemp)
   echo "TEAMS_APP_ID=$(get TEAMS_APP_ID)"
   echo "TEAMS_APP_PASSWORD=$(get TEAMS_APP_PASSWORD)"
   echo "TEAMS_APP_TENANT_ID=$(get TEAMS_APP_TENANT_ID)"
+  echo "# --- Meeting transcription (optional; pm graph) ---"
+  echo "ASSEMBLY_AI_API_KEY=$(get ASSEMBLY_AI_API_KEY)"
   echo "# --- MCP connectors (optional; pm graph) ---"
   echo "ATLASSIAN_EMAIL=$(get ATLASSIAN_EMAIL)"
   echo "ATLASSIAN_API_TOKEN=$(get ATLASSIAN_API_TOKEN)"

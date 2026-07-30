@@ -16,6 +16,7 @@ import io
 import json
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
@@ -162,6 +163,84 @@ def _extract_file_text(name: str, mime: str, data: bytes) -> tuple[str, str]:
         f"unsupported file type ({name or mime or 'unknown'}); "
         "readable types: pdf, docx, and plain-text formats"
     )
+
+
+def graph_find_recording(
+    team_id: str, channel_name: str, on_or_before: str = "", subject_contains: str = ""
+) -> dict[str, Any]:
+    """Find a channel meeting's recording and return a link that can be transcribed.
+
+    Teams puts a channel meeting's recording in that channel's SharePoint folder
+    (``<channel>/Recordings``), which this app can read. Use this when someone asks
+    what happened in a call held in a channel — a standup, a review — and then pass
+    the returned ``audio_url`` to ``transcribe_recording``.
+
+    Recordings of meetings that were NOT held in a channel live in the organiser's
+    personal OneDrive and are not reachable this way.
+
+    Args:
+        team_id: The team's group id (in the Teams context of this conversation).
+        channel_name: The channel's display name, e.g. ``Dev team``.
+        on_or_before: Optional ``YYYY-MM-DD``; returns the newest recording created
+            on or before that date. Omit for the most recent one.
+        subject_contains: Optional case-insensitive filter on the file name, e.g.
+            ``Daily Standup``, for channels hosting several meeting series.
+
+    Returns:
+        ``{"ok": True, "name": str, "created": str, "size": int, "audio_url": str,
+        "candidates": [names...]}`` or ``{"ok": False, "reason": str}``. The
+        ``audio_url`` is short-lived — use it immediately and never log it.
+    """
+    if not team_id or not channel_name:
+        return _fail("I need to know which team and channel the meeting was in.")
+    folder = f"{channel_name}/Recordings"
+    try:
+        resp = _get(f"/groups/{team_id}/drive/root:/{quote(folder)}:/children")
+        if resp.status_code != 200:
+            return _fail(
+                f"I couldn't find a recordings folder for the {channel_name} channel.",
+                detail=f"list {folder} -> {resp.status_code}: {resp.text[:400]}",
+                where="find_recording.list",
+            )
+        items = [
+            i for i in (resp.json().get("value") or []) if str(i.get("name", "")).endswith(".mp4")
+        ]
+        if subject_contains:
+            needle = subject_contains.lower()
+            items = [i for i in items if needle in str(i.get("name", "")).lower()]
+        if on_or_before:
+            items = [i for i in items if str(i.get("createdDateTime", ""))[:10] <= on_or_before]
+        if not items:
+            return _fail("I couldn't find a recording matching that in this channel.")
+        items.sort(key=lambda i: str(i.get("createdDateTime") or ""), reverse=True)
+        newest = items[0]
+        url = newest.get("@microsoft.graph.downloadUrl")
+        if not url:
+            return _fail(
+                "I found the recording but can't get a link to its audio.",
+                detail=f"no downloadUrl on item {newest.get('id')}",
+                where="find_recording.url",
+            )
+        return {
+            "ok": True,
+            "name": str(newest.get("name") or ""),
+            "created": str(newest.get("createdDateTime") or ""),
+            "size": int(newest.get("size") or 0),
+            "audio_url": url,
+            "candidates": [str(i.get("name") or "") for i in items[:5]],
+        }
+    except RuntimeError as exc:
+        return _fail(
+            "I'm not able to reach Teams right now.",
+            detail=f"{type(exc).__name__}: {exc}",
+            where="find_recording",
+        )
+    except requests.RequestException as exc:
+        return _fail(
+            "I couldn't reach Teams to look for the recording.",
+            detail=f"{type(exc).__name__}: {exc}",
+            where="find_recording",
+        )
 
 
 def graph_file_content(url: str = "", drive_id: str = "", item_id: str = "") -> dict[str, Any]:
