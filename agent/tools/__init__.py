@@ -26,7 +26,7 @@ from .resolve_finding_thread import resolve_finding_thread
 from .search_repo_code import search_repo_code
 from .slack_read_thread_messages import slack_read_thread_messages
 from .slack_thread_reply import slack_thread_reply
-from .transcribe_recording import transcribe_recording
+from .transcribe_recording import transcribe_channel_meeting, transcribe_recording
 from .update_finding import update_finding
 from .web_search import web_search
 
@@ -38,6 +38,7 @@ __all__ = [
     "graph_file_content",
     "graph_find_recording",
     "graph_meeting_transcript",
+    "transcribe_channel_meeting",
     "transcribe_recording",
     "http_request",
     "linear_comment",

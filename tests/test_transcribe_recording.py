@@ -7,9 +7,9 @@ relays.
 
 from __future__ import annotations
 
-import pytest
-
 from importlib import import_module
+
+import pytest
 
 # The package re-exports the function under the module's own name, so a plain
 # `import agent.tools.transcribe_recording` hands back the function.
@@ -100,3 +100,44 @@ def test_error_status_from_the_job_is_reported_plainly(monkeypatch):
     result = mod.transcribe_recording(AUDIO)
     assert result["ok"] is False
     assert "403" not in result["reason"]
+
+
+def test_channel_meeting_resolves_the_link_at_submit_time(monkeypatch):
+    """The fused tool must fetch the download link itself.
+
+    A link fetched in an earlier turn expires (SharePoint tempauth), which is what
+    made the two-step flow fail with a 401 download error in production.
+    """
+    calls: list[str] = []
+    monkeypatch.setattr(
+        mod, "_submit_and_poll", lambda url, n: {"ok": True, "transcript": "x", "_url": url}
+    )
+
+    def _find(team, channel, on_or_before="", subject_contains=""):
+        calls.append(f"{team}/{channel}")
+        return {
+            "ok": True,
+            "name": "standup.mp4",
+            "created": "2026-07-30T09:06:18Z",
+            "audio_url": "https://sp/fresh?tempauth=NEW",
+        }
+
+    graph_api = import_module("agent.tools.graph_api")
+    monkeypatch.setattr(graph_api, "graph_find_recording", _find)
+    out = mod.transcribe_channel_meeting("team-1", "Dev team", subject_contains="Daily Standup")
+    assert out["ok"] is True
+    assert out["_url"].endswith("tempauth=NEW")
+    assert out["recording"] == "standup.mp4"
+    assert calls == ["team-1/Dev team"]
+
+
+def test_channel_meeting_reports_a_find_failure_plainly(monkeypatch):
+    graph_api = import_module("agent.tools.graph_api")
+    monkeypatch.setattr(
+        graph_api,
+        "graph_find_recording",
+        lambda *a, **k: {"ok": False, "reason": "I couldn't find a recording matching that."},
+    )
+    out = mod.transcribe_channel_meeting("team-1", "Nope")
+    assert out["ok"] is False
+    assert "couldn't find" in out["reason"]

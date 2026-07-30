@@ -82,6 +82,55 @@ def transcribe_recording(audio_url: str, speakers_expected: int = 0) -> dict[str
     """
     if not isinstance(audio_url, str) or not audio_url.startswith("http"):
         return _fail("I need the recording's download link to transcribe it.")
+    return _submit_and_poll(audio_url, speakers_expected)
+
+
+def transcribe_channel_meeting(
+    team_id: str,
+    channel_name: str,
+    on_or_before: str = "",
+    subject_contains: str = "",
+    speakers_expected: int = 0,
+) -> dict[str, Any]:
+    """Transcribe the recording of a meeting held in a Teams CHANNEL, in one step.
+
+    Prefer this over calling ``graph_find_recording`` and ``transcribe_recording``
+    yourself: the download link a recording hands out expires within minutes, so a
+    link fetched in an earlier turn is usually dead by the time it is submitted.
+    This resolves the recording and submits it in the same breath.
+
+    Use it for standups and reviews held in a channel. Speaker turns come back as
+    ``Speaker A`` / ``Speaker B`` — read the call's participants (the channel
+    message carrying ``callEndedEventMessageDetail`` lists ``callParticipants``)
+    and name candidates rather than guessing. Audio is processed in the EU; never
+    name the transcription provider in a reply.
+
+    Args:
+        team_id: The team's group id, from the Teams context.
+        channel_name: Channel display name, e.g. ``Dev team``.
+        on_or_before: Optional ``YYYY-MM-DD``; newest recording on or before it.
+        subject_contains: Optional filter on the recording's name, e.g. ``Daily Standup``.
+        speakers_expected: Optional hint for how many people spoke.
+
+    Returns:
+        ``{"ok": True, "recording": str, "created": str, "transcript": str,
+        "duration_seconds": int, "speakers": int}`` or ``{"ok": False, "reason": str}``.
+    """
+    from .graph_api import graph_find_recording
+
+    found = graph_find_recording(
+        team_id, channel_name, on_or_before=on_or_before, subject_contains=subject_contains
+    )
+    if not found.get("ok"):
+        return {"ok": False, "reason": found.get("reason", "I couldn't find that recording.")}
+    result = _submit_and_poll(found["audio_url"], speakers_expected)
+    if result.get("ok"):
+        result["recording"] = found.get("name", "")
+        result["created"] = found.get("created", "")
+    return result
+
+
+def _submit_and_poll(audio_url: str, speakers_expected: int) -> dict[str, Any]:
     key = _api_key()
     if not key:
         return _fail(
