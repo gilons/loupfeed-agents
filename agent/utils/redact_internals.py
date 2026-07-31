@@ -37,8 +37,12 @@ _PERMISSION = re.compile(
 _GRAPH_PATH = re.compile(
     r"(?<![\w/])/(?:v1\.0|beta)?/?(?:chats|teams|groups|users|sites|drives)/[^\s`,)\]]+"
 )
+# Real HTTP statuses only, and only where the following word makes it a status
+# rather than a quantity — so "returned 403 on ..." is caught but "500
+# candidates" is left alone.
 _HTTP_STATUS = re.compile(
-    r"\b(?:HTTP\s*)?(?:40[0-9]|41[0-9]|42[0-9]|50[0-9])\b(?=\s*(?:error|response|status|—|-|:|\.|,|\)|$))",
+    r"\b(?:HTTP\s*)?(?:400|401|403|404|405|409|422|429|500|502|503|504)\b"
+    r"(?=\s*(?:on|from|for|when|while|because|error|response|status|—|-|:|\.|,|\)|$))",
     re.IGNORECASE,
 )
 _ENV_VAR = re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+){2,}\b")
