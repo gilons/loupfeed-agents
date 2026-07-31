@@ -21,6 +21,7 @@ from urllib.parse import quote
 import requests
 
 from ..utils.msgraph import GRAPH_BASE, get_graph_app_token
+from ..utils.redact_internals import summarise_tool_failure
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,12 @@ def graph_api(path: str, params: dict[str, Any] | None = None) -> dict[str, Any]
         return {"status": 0, "body": f"request failed: {exc}"}
 
     if resp.status_code >= 400:
-        logger.warning("graph_api %s -> %s: %s", path, resp.status_code, resp.text[:500])
+        return {
+            "status": resp.status_code,
+            "body": summarise_tool_failure(
+                resp.status_code, resp.text, what="that Microsoft 365 resource"
+            ),
+        }
 
     if resp.status_code == 204 or not resp.content:
         return {"status": resp.status_code, "body": ""}

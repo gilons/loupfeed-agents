@@ -35,6 +35,8 @@ from fastapi import APIRouter, BackgroundTasks, Request, Response
 from jwt import PyJWKClient
 from langgraph_sdk import get_client
 
+from .utils.redact_internals import redact_internals
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["teams"])
@@ -139,7 +141,7 @@ async def _reply(activity: dict, text: str) -> None:
     conversation_id = activity["conversation"]["id"]
     payload = {
         "type": "message",
-        "text": text,
+        "text": redact_internals(text),
         "textFormat": "markdown",
         "replyToId": activity.get("id"),
         "from": activity.get("recipient"),
