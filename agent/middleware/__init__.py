@@ -2,6 +2,7 @@ from .check_message_queue import check_message_queue_before_model
 from .exclude_tools import ExcludeToolsMiddleware
 from .model_fallback import ModelFallbackMiddleware
 from .notify_step_limit import notify_step_limit_reached
+from .redact_history import RedactHistoryMiddleware
 from .refresh_github_proxy import refresh_github_proxy_before_model
 from .refresh_slack_status import SlackAssistantStatusMiddleware
 from .sandbox_circuit_breaker import SandboxCircuitBreakerMiddleware
@@ -13,6 +14,7 @@ from .tool_artifact import ToolArtifactMiddleware
 from .tool_error_handler import ToolErrorMiddleware
 
 __all__ = [
+    "RedactHistoryMiddleware",
     "StripToolMarkupMiddleware",
     "ExcludeToolsMiddleware",
     "ModelFallbackMiddleware",

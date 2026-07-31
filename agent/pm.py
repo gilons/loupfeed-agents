@@ -35,6 +35,7 @@ from .dashboard.team_settings import get_team_default_model
 from .dashboard.user_mappings import login_for_email
 from .middleware import (
     ExcludeToolsMiddleware,
+    RedactHistoryMiddleware,
     SanitizeThinkingBlocksMiddleware,
     SanitizeToolInputsMiddleware,
     StripToolMarkupMiddleware,
@@ -286,6 +287,7 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
             ToolErrorMiddleware(),
             ExcludeToolsMiddleware(excluded=_EXCLUDED_TOOLS),
             SanitizeThinkingBlocksMiddleware(),
+            RedactHistoryMiddleware(),
             StripToolMarkupMiddleware(),
         ],
     ).with_config(config)
