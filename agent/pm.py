@@ -37,6 +37,7 @@ from .middleware import (
     ExcludeToolsMiddleware,
     SanitizeThinkingBlocksMiddleware,
     SanitizeToolInputsMiddleware,
+    StripToolMarkupMiddleware,
     ToolErrorMiddleware,
 )
 from .pm_connectors import load_connector_tools
@@ -46,6 +47,7 @@ from .server import (
     graph_loaded_for_execution,
 )
 from .tools import (
+    confluence_attach_image,
     fetch_url,
     github_api,
     graph_api,
@@ -271,6 +273,7 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
             graph_find_recording,
             transcribe_channel_meeting,
             transcribe_recording,
+            confluence_attach_image,
             web_search,
             fetch_url,
             http_request,
@@ -283,6 +286,7 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
             ToolErrorMiddleware(),
             ExcludeToolsMiddleware(excluded=_EXCLUDED_TOOLS),
             SanitizeThinkingBlocksMiddleware(),
+            StripToolMarkupMiddleware(),
         ],
     ).with_config(config)
 
