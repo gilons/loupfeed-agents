@@ -34,6 +34,7 @@ __all__ = [
     "add_finding",
     "fetch_url",
     "github_api",
+    "confluence_attach_image",
     "graph_api",
     "graph_file_content",
     "graph_find_recording",
