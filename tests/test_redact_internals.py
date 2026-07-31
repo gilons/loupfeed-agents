@@ -54,6 +54,21 @@ def test_tool_names_and_endpoints_are_replaced():
     assert "403" not in out
 
 
+def test_status_codes_are_caught_mid_sentence():
+    """'returned 403 on ...' slipped through the first version of this."""
+    out = redact_internals("graph_meeting_transcript returned 403 on the meeting chat.")
+    assert "403" not in out, out
+
+
+def test_quantities_are_not_mistaken_for_status_codes():
+    for text in (
+        "We imported 500 candidates yesterday.",
+        "There are 404 open items in the backlog.",
+        "The exposé run covered 429 documents.",
+    ):
+        assert redact_internals(text) == text, text
+
+
 def test_config_key_names_are_replaced():
     out = redact_internals("Set ASSEMBLY_AI_API_KEY and TEAMS_APP_TENANT_ID first.")
     assert "ASSEMBLY_AI_API_KEY" not in out
