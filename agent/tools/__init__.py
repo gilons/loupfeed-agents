@@ -1,4 +1,5 @@
 from .add_finding import add_finding
+from .confluence_attach_image import confluence_attach_image
 from .fetch_url import fetch_url
 from .github_api import github_api
 from .graph_api import (
