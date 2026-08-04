@@ -1,4 +1,5 @@
 from .check_message_queue import check_message_queue_before_model
+from .current_time import CurrentTimeMiddleware
 from .exclude_tools import ExcludeToolsMiddleware
 from .model_fallback import ModelFallbackMiddleware
 from .notify_step_limit import notify_step_limit_reached
@@ -14,6 +15,7 @@ from .tool_artifact import ToolArtifactMiddleware
 from .tool_error_handler import ToolErrorMiddleware
 
 __all__ = [
+    "CurrentTimeMiddleware",
     "RedactHistoryMiddleware",
     "StripToolMarkupMiddleware",
     "ExcludeToolsMiddleware",

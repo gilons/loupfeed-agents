@@ -34,6 +34,7 @@ from .dashboard.options import SUPPORTED_MODEL_IDS, model_supports_effort
 from .dashboard.team_settings import get_team_default_model
 from .dashboard.user_mappings import login_for_email
 from .middleware import (
+    CurrentTimeMiddleware,
     ExcludeToolsMiddleware,
     RedactHistoryMiddleware,
     SanitizeThinkingBlocksMiddleware,
@@ -282,6 +283,7 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
             search_repo_code,
         ],
         middleware=[
+            CurrentTimeMiddleware(),
             SanitizeToolInputsMiddleware(),
             ModelCallLimitMiddleware(run_limit=PM_MODEL_CALL_LIMIT, exit_behavior="end"),
             ToolErrorMiddleware(),
