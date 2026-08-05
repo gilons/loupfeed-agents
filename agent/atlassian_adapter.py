@@ -244,10 +244,16 @@ def build_prompt(normalised: dict[str, Any], graph: str) -> str:
         return (
             f"You have been assigned {where}"
             + (f' ("{title}")' if title else "")
-            + ".\n\nRead the issue with your Atlassian tools, implement the fix in the "
+            + ".\n\nStart from a clean base: in the repository, `git fetch origin` and "
+            "create your branch from `origin/main` (`git checkout -B <branch> origin/main`). "
+            "The sandbox may still hold work from an earlier task, and your pull request must "
+            "contain ONLY your own commits: if `git log origin/main..HEAD` shows anything you "
+            "did not write, you branched from the wrong place, so start over from origin/main.\n\n"
+            "Read the issue with your Atlassian tools, implement the fix in the "
             "bound repository, and open a pull request whose title carries the issue key. "
             "Then summarise what you did in one short paragraph: that summary is posted "
-            "back as a comment on the issue, so write it for the reporter, not for a log.\n"
+            "back as a comment on the issue, so write it for the reporter, not for a log. "
+            "Never claim a check or test passed unless you read its actual result.\n"
             + (f"\nThe request said: {asked}\n" if asked else "")
         )
     return (
