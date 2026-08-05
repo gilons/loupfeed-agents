@@ -309,9 +309,9 @@ def open_pull_request(
     base: str,
     title: str,
     body: str,
-    draft: bool = True,
+    draft: bool = False,
 ) -> dict[str, Any]:
-    """Open a draft GitHub pull request attributed to the triggering user.
+    """Open a GitHub pull request attributed to the triggering user.
 
     Use this to OPEN a NEW pull request (instead of `gh pr create`) so the PR is
     created as the person who triggered the run rather than open-swe[bot]. Push
@@ -329,7 +329,8 @@ def open_pull_request(
         base: The branch you want to merge into (e.g. "main").
         title: PR title.
         body: PR description (Markdown).
-        draft: Open as a draft PR. Defaults to True.
+        draft: Open as a draft PR. Defaults to False, so CI runs and
+            reviewers (human or the reviewer graph) engage immediately.
 
     Returns:
         On success: {"success": True, "created": bool, "url": str, "number": int,
