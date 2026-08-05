@@ -51,9 +51,13 @@ REQUIRED_ENV = (
 )
 RECOMMENDED_ENV = (
     "CONNECTOR_PUBLIC_BASE_URL",
-    "ASSEMBLYAI_API_KEY",
+    "ASSEMBLY_AI_API_KEY",
     "TOKEN_ENCRYPTION_KEY",
 )
+
+# Connectors the pm agent cannot function without; anything else registered
+# but unconnected (e.g. the optional delegated ms365 fallback) is a warning.
+REQUIRED_CONNECTORS = frozenset({"atlassian"})
 
 
 def _site_base() -> str:
@@ -197,13 +201,19 @@ def check_atlassian_connector(_: DoctorOptions) -> list[CheckResult]:
         return [CheckResult("atlassian:connector", SKIP, "no connectors registered")]
     out: list[CheckResult] = []
     for cname, s in status.items():
+        connected = bool(s.get("connected"))
+        severity = FAIL if cname in REQUIRED_CONNECTORS else WARN
         out.append(
             CheckResult(
                 f"connector:{cname}",
-                PASS if s.get("connected") else FAIL,
-                "connected" if s.get("connected") else "not connected",
+                PASS if connected else severity,
+                "connected"
+                if connected
+                else "not connected (optional)"
+                if severity == WARN
+                else "not connected",
                 ""
-                if s.get("connected")
+                if connected
                 else f"visit /connectors/{cname}/start logged in AS THE AGENT ACCOUNT",
             )
         )
