@@ -283,10 +283,61 @@ def test_async_paths_never_block():
     from agent import atlassian_adapter as mod
 
     webhook = inspect.getsource(mod.atlassian_webhook)
-    assert "asyncio.to_thread(hydrate_confluence_comment" in webhook
+    assert "asyncio.to_thread(hydrate_confluence" in webhook
     dispatch_src = inspect.getsource(mod.dispatch)
     assert "post_reply" in dispatch_src
     assert "asyncio.to_thread(\n            post_reply" in dispatch_src or (
         "asyncio.to_thread(post_reply" in dispatch_src
     )
     assert "\n    post_reply(" not in dispatch_src, "post_reply must not be called directly"
+
+
+def test_mention_written_into_a_page_body_is_detected():
+    """A mention in the page text itself, not a comment: the page-updated
+    event carries no body either, so it has to be fetched (2026-08-05)."""
+    from agent.atlassian_adapter import hydrate_confluence, is_addressed_to_us
+
+    n = normalise(
+        {
+            "eventType": "avi:confluence:updated:page",
+            "content": {"id": "281477123", "title": "Form Standardization Phase 1 PRD"},
+            "atlassianId": HUMAN,
+        }
+    )
+    assert is_addressed_to_us(n, APP) is False
+
+    class _R:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "title": "Form Standardization Phase 1 PRD",
+                "body": {
+                    "storage": {
+                        "value": '<p><ac:link><ri:user ri:account-id="%s" /></ac:link> please '
+                        "draft the TechSpec skeleton from the call transcripts.</p>" % APP
+                    }
+                },
+            }
+
+    env = {"ATLASSIAN_EMAIL": "a@b.c", "ATLASSIAN_API_TOKEN": "t"}
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.atlassian_adapter.requests.get", return_value=_R()),
+    ):
+        hydrated = hydrate_confluence(n)
+
+    assert APP in hydrated["mentions"]
+    assert hydrated["page_id"] == "281477123", "the page is already the reply surface"
+    assert is_addressed_to_us(hydrated, APP) is True
+
+
+def test_page_hydration_leaves_jira_events_alone():
+    from agent.atlassian_adapter import hydrate_confluence
+
+    n = normalise(COMMENT_EVENT)
+    with patch("agent.atlassian_adapter.requests.get") as get:
+        out = hydrate_confluence(n)
+    get.assert_not_called()
+    assert out["issue_key"] == "SPB-3"

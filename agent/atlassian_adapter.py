@@ -105,6 +105,40 @@ _STORAGE_MENTION = re.compile(r'ri:account-id="([^"]+)"')
 _TAGS = re.compile(r"<[^>]+>")
 
 
+def hydrate_confluence_page(normalised: dict[str, Any]) -> dict[str, Any]:
+    """Fill in a page's own body so a mention written INTO the page is seen.
+
+    ``avi:confluence:updated:page`` carries no body either, so mentioning the
+    agent in the page text itself (rather than in a comment) was invisible.
+    The reply still goes to the page, which is already the surface.
+    """
+    if normalised.get("event_type") != "avi:confluence:updated:page":
+        return normalised
+    page_id = normalised.get("page_id")
+    auth = _atlassian_auth()
+    if not page_id or not auth:
+        return normalised
+    try:
+        r = requests.get(
+            f"{_site_base()}/wiki/api/v2/pages/{page_id}?body-format=storage",
+            auth=auth,
+            timeout=_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        logger.warning("confluence page hydrate failed: %s: %s", type(exc).__name__, exc)
+        return normalised
+    if r.status_code >= 400:
+        logger.warning("confluence page hydrate failed: %s", r.status_code)
+        return normalised
+    data = r.json()
+    storage = str(((data.get("body") or {}).get("storage") or {}).get("value") or "")
+    normalised["mentions"] = _STORAGE_MENTION.findall(storage)
+    normalised["title"] = str(data.get("title") or normalised.get("title") or "") or None
+    # Keep the page text out of the prompt: pages are long and the agent has
+    # tools to read it. The mention is what we needed from the body.
+    return normalised
+
+
 def hydrate_confluence_comment(normalised: dict[str, Any]) -> dict[str, Any]:
     """Fill in a Confluence comment's body, which its event does not carry.
 
@@ -139,6 +173,11 @@ def hydrate_confluence_comment(normalised: dict[str, Any]) -> dict[str, Any]:
     if parent:
         normalised["page_id"] = parent
     return normalised
+
+
+def hydrate_confluence(normalised: dict[str, Any]) -> dict[str, Any]:
+    """Confluence events never carry bodies; fetch whichever one applies."""
+    return hydrate_confluence_page(hydrate_confluence_comment(normalised))
 
 
 def is_addressed_to_us(normalised: dict[str, Any], app_account_id: str) -> bool:
@@ -332,7 +371,7 @@ async def atlassian_webhook(request: Request, background_tasks: BackgroundTasks)
     payload = await request.json()
     event = payload.get("event") or payload
     # blockbuster forbids blocking I/O in async routes: hydration does HTTP.
-    normalised = await asyncio.to_thread(hydrate_confluence_comment, normalise(event))
+    normalised = await asyncio.to_thread(hydrate_confluence, normalise(event))
     app_account_id = str(payload.get("appAccountId") or "")
     addressed = is_addressed_to_us(normalised, app_account_id)
 
