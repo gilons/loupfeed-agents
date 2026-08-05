@@ -17,15 +17,24 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import uuid
 from typing import Any
 
-from fastapi import APIRouter, Request, Response
+import requests
+from fastapi import APIRouter, BackgroundTasks, Request, Response
+from langgraph_sdk import get_client
+
+from .utils.redact_internals import redact_internals
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 _SECRET_HEADER = "x-loupfeed-secret"
+_TIMEOUT = 30
+LANGGRAPH_URL = os.environ.get("LANGGRAPH_URL") or os.environ.get(
+    "LANGGRAPH_URL_PROD", "http://localhost:2024"
+)
 
 
 def shared_secret() -> str:
@@ -108,8 +117,171 @@ def is_addressed_to_us(normalised: dict[str, Any], app_account_id: str) -> bool:
     return False
 
 
+CODING_GRAPH = "agent"
+PM_GRAPH = "pm"
+
+# One surface item maps to one agent thread, the same rule every entry point
+# follows, so follow-up comments continue the same conversation.
+_THREAD_NAMESPACE = uuid.UUID("6f0a26b5-2f52-5a2e-9f1e-0a4b6a1c9d31")
+
+
+def surface_key(normalised: dict[str, Any]) -> str:
+    if normalised.get("issue_key"):
+        return f"jira:{normalised['issue_key']}"
+    return f"confluence:{normalised.get('page_id')}"
+
+
+def langgraph_thread_id(normalised: dict[str, Any]) -> str:
+    return str(uuid.uuid5(_THREAD_NAMESPACE, f"loupfeed-atlassian:{surface_key(normalised)}"))
+
+
+def route(normalised: dict[str, Any]) -> str:
+    """Assignment means do the work; a mention means answer or draft.
+
+    Assigning an issue to the app is the "bug to PR" contract, so it goes to
+    the coding agent. Everything else that names us is a question or a
+    drafting request and belongs to the pm agent, which can read the
+    planning system and the repository read-only.
+    """
+    if "assignee" in (normalised.get("changed_fields") or []):
+        return CODING_GRAPH
+    return PM_GRAPH
+
+
+def build_prompt(normalised: dict[str, Any], graph: str) -> str:
+    where = (
+        f"Jira issue {normalised['issue_key']}"
+        if normalised.get("issue_key")
+        else f"Confluence page {normalised.get('page_id')}"
+    )
+    title = normalised.get("title") or ""
+    asked = normalised.get("text") or ""
+    if graph == CODING_GRAPH:
+        return (
+            f"You have been assigned {where}"
+            + (f' ("{title}")' if title else "")
+            + ".\n\nRead the issue with your Atlassian tools, implement the fix in the "
+            "bound repository, and open a pull request whose title carries the issue key. "
+            "Then summarise what you did in one short paragraph: that summary is posted "
+            "back as a comment on the issue, so write it for the reporter, not for a log.\n"
+            + (f"\nThe request said: {asked}\n" if asked else "")
+        )
+    return (
+        f"You were mentioned on {where}"
+        + (f' ("{title}")' if title else "")
+        + ".\n\nRead it with your Atlassian tools before answering, and reply for a "
+        "chat-length comment: lead with the answer or the action you took. "
+        "Your reply is posted as a comment on that item.\n"
+        + (f"\nThe request said: {asked}\n" if asked else "")
+    )
+
+
+def _atlassian_auth() -> tuple[str, str] | None:
+    email = os.environ.get("ATLASSIAN_EMAIL", "")
+    token = os.environ.get("ATLASSIAN_API_TOKEN", "")
+    return (email, token) if email and token else None
+
+
+def _site_base() -> str:
+    return os.environ.get("ATLASSIAN_SITE_URL", "https://dinolabgmbh.atlassian.net").rstrip("/")
+
+
+def post_reply(normalised: dict[str, Any], text: str) -> bool:
+    """Comment the agent's answer back onto the issue or page.
+
+    Uses the agent's own Atlassian credential today; once the entry app's
+    ``asApp()`` path is wired this moves into the Forge app so no token is
+    needed on the deployment at all.
+    """
+    auth = _atlassian_auth()
+    if not auth:
+        logger.warning("atlassian reply skipped: no Atlassian credential configured")
+        return False
+    clean = redact_internals(text)[:4000]
+    try:
+        if normalised.get("issue_key"):
+            r = requests.post(
+                f"{_site_base()}/rest/api/3/issue/{normalised['issue_key']}/comment",
+                auth=auth,
+                json={
+                    "body": {
+                        "type": "doc",
+                        "version": 1,
+                        "content": [
+                            {"type": "paragraph", "content": [{"type": "text", "text": clean}]}
+                        ],
+                    }
+                },
+                timeout=_TIMEOUT,
+            )
+        else:
+            r = requests.post(
+                f"{_site_base()}/wiki/api/v2/footer-comments",
+                auth=auth,
+                json={
+                    "pageId": normalised.get("page_id"),
+                    "body": {"representation": "storage", "value": f"<p>{clean}</p>"},
+                },
+                timeout=_TIMEOUT,
+            )
+    except requests.RequestException as exc:
+        logger.warning("atlassian reply failed: %s: %s", type(exc).__name__, exc)
+        return False
+    if r.status_code >= 400:
+        logger.warning("atlassian reply failed: %s %s", r.status_code, r.text[:200])
+        return False
+    return True
+
+
+async def dispatch(normalised: dict[str, Any]) -> None:
+    graph = route(normalised)
+    thread_id = langgraph_thread_id(normalised)
+    logger.info("atlassian dispatch: %s -> %s thread=%s", surface_key(normalised), graph, thread_id)
+    client = get_client(url=LANGGRAPH_URL)
+    await client.threads.create(thread_id=thread_id, if_exists="do_nothing")
+    configurable: dict[str, Any] = {
+        "source": "atlassian",
+        "atlassian_surface": surface_key(normalised),
+        "requester_atlassian_account_id": normalised.get("requester_account_id"),
+    }
+    try:
+        result = await client.runs.wait(
+            thread_id,
+            graph,
+            input={"messages": [{"role": "user", "content": build_prompt(normalised, graph)}]},
+            config={"configurable": configurable},
+        )
+    except Exception:
+        logger.exception("atlassian dispatch: run failed for %s", surface_key(normalised))
+        post_reply(
+            normalised,
+            "Something went wrong while working on that. Giles should check the platform logs.",
+        )
+        return
+    post_reply(normalised, last_ai_text(result) or "(no reply produced)")
+
+
+def last_ai_text(result: object) -> str:
+    messages = (result or {}).get("messages", []) if isinstance(result, dict) else []
+    for message in reversed(messages):
+        if not isinstance(message, dict) or message.get("type") != "ai":
+            continue
+        content = message.get("content")
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+        if isinstance(content, list):
+            text = "".join(
+                block.get("text", "")
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "text"
+            ).strip()
+            if text:
+                return text
+    return ""
+
+
 @router.post("/webhooks/atlassian")
-async def atlassian_webhook(request: Request) -> Response:
+async def atlassian_webhook(request: Request, background_tasks: BackgroundTasks) -> Response:
     if not _authorised(request):
         logger.warning("atlassian webhook: rejected unauthenticated request")
         return Response(status_code=401)
@@ -128,5 +300,7 @@ async def atlassian_webhook(request: Request) -> Response:
         normalised.get("requester_account_id"),
         (normalised.get("text") or "")[:120],
     )
-    # Agent dispatch lands here next (pm for pages, coding for bugs).
+    if addressed:
+        # Runs take minutes; acknowledge now, work in the background.
+        background_tasks.add_task(dispatch, normalised)
     return Response(status_code=202)

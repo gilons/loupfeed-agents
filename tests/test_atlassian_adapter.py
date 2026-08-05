@@ -91,8 +91,14 @@ def test_unauthenticated_request_is_rejected():
 
     from agent.webapp import app
 
+    async def _no_dispatch(_normalised):
+        return None
+
     client = TestClient(app)
-    with patch.dict("os.environ", {"ATLASSIAN_APP_SHARED_SECRET": "s3cret"}, clear=False):
+    with (
+        patch.dict("os.environ", {"ATLASSIAN_APP_SHARED_SECRET": "s3cret"}, clear=False),
+        patch("agent.atlassian_adapter.dispatch", _no_dispatch),
+    ):
         assert client.post("/webhooks/atlassian", json={"event": COMMENT_EVENT}).status_code == 401
         ok = client.post(
             "/webhooks/atlassian",
@@ -115,3 +121,112 @@ def test_missing_configured_secret_rejects_everything():
             headers={"X-Loupfeed-Secret": ""},
         )
         assert r.status_code == 401
+
+
+# --- dispatch: routing, threads, prompts, replies -------------------------
+
+
+def test_assignment_routes_to_the_coding_agent():
+    from agent.atlassian_adapter import CODING_GRAPH, route
+
+    assert route(normalise(ASSIGN_EVENT)) == CODING_GRAPH
+
+
+def test_mention_routes_to_the_pm_agent():
+    from agent.atlassian_adapter import PM_GRAPH, route
+
+    assert route(normalise(COMMENT_EVENT)) == PM_GRAPH
+
+
+def test_thread_id_is_stable_per_item_and_distinct_across_items():
+    from agent.atlassian_adapter import langgraph_thread_id
+
+    a = langgraph_thread_id(normalise(COMMENT_EVENT))
+    b = langgraph_thread_id(normalise(ASSIGN_EVENT))  # same issue, other event
+    c = langgraph_thread_id(normalise(CHATTER_EVENT))  # different issue
+    assert a == b, "follow-ups on one issue must continue one thread"
+    assert a != c
+
+
+def test_prompts_carry_context_and_the_reply_contract():
+    from agent.atlassian_adapter import CODING_GRAPH, PM_GRAPH, build_prompt
+
+    coding = build_prompt(normalise(ASSIGN_EVENT), CODING_GRAPH)
+    assert "SPB-3" in coding and "pull request" in coding and "issue key" in coding
+    pm = build_prompt(normalise(COMMENT_EVENT), PM_GRAPH)
+    assert "SPB-3" in pm and "posted as a comment" in pm
+    assert "please pick this up" in pm, "the human's own words must reach the agent"
+
+
+def test_reply_posts_adf_to_jira_and_redacts_internals():
+    from agent.atlassian_adapter import post_reply
+
+    captured = {}
+
+    class _R:
+        status_code = 201
+
+    def _post(url, **kw):
+        captured["url"] = url
+        captured["json"] = kw.get("json")
+        return _R()
+
+    env = {"ATLASSIAN_EMAIL": "a@b.c", "ATLASSIAN_API_TOKEN": "t"}
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.atlassian_adapter.requests.post", side_effect=_post),
+    ):
+        assert post_reply(normalise(COMMENT_EVENT), "Done. Chat.Read.All was needed.") is True
+    assert "/rest/api/3/issue/SPB-3/comment" in captured["url"]
+    text = captured["json"]["body"]["content"][0]["content"][0]["text"]
+    assert "Chat.Read.All" not in text, "internals must not leak into a public comment"
+
+
+def test_reply_posts_storage_format_to_confluence():
+    from agent.atlassian_adapter import post_reply
+
+    captured = {}
+
+    class _R:
+        status_code = 201
+
+    def _post(url, **kw):
+        captured["url"] = url
+        captured["json"] = kw.get("json")
+        return _R()
+
+    n = normalise(
+        {
+            "eventType": "avi:confluence:created:comment",
+            "content": {"id": "123", "title": "Re: PRD"},
+            "atlassianId": HUMAN,
+        }
+    )
+    env = {"ATLASSIAN_EMAIL": "a@b.c", "ATLASSIAN_API_TOKEN": "t"}
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.atlassian_adapter.requests.post", side_effect=_post),
+    ):
+        assert post_reply(n, "Drafted the section.") is True
+    assert "/wiki/api/v2/footer-comments" in captured["url"]
+    assert captured["json"]["pageId"] == "123"
+
+
+def test_reply_without_credentials_is_a_clean_no():
+    from agent.atlassian_adapter import post_reply
+
+    with patch.dict("os.environ", {"ATLASSIAN_EMAIL": "", "ATLASSIAN_API_TOKEN": ""}, clear=False):
+        assert post_reply(normalise(COMMENT_EVENT), "hi") is False
+
+
+def test_last_ai_text_prefers_the_final_ai_message():
+    from agent.atlassian_adapter import last_ai_text
+
+    result = {
+        "messages": [
+            {"type": "human", "content": "do it"},
+            {"type": "ai", "content": "first"},
+            {"type": "ai", "content": [{"type": "text", "text": "final answer"}]},
+        ]
+    }
+    assert last_ai_text(result) == "final answer"
