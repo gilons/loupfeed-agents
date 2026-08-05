@@ -272,3 +272,21 @@ def test_confluence_comment_body_is_hydrated_so_mentions_are_visible():
     assert "what is this page for?" in hydrated["text"]
     assert hydrated["page_id"] == "288194578", "reply belongs on the page, not the comment"
     assert is_addressed_to_us(hydrated, APP) is True
+
+
+def test_async_paths_never_block():
+    """`langgraph dev`'s blockbuster raises on blocking I/O inside async
+    functions, which is how the first live Confluence dispatch 500'd. Both
+    HTTP-doing helpers must be reached through asyncio.to_thread."""
+    import inspect
+
+    from agent import atlassian_adapter as mod
+
+    webhook = inspect.getsource(mod.atlassian_webhook)
+    assert "asyncio.to_thread(hydrate_confluence_comment" in webhook
+    dispatch_src = inspect.getsource(mod.dispatch)
+    assert "post_reply" in dispatch_src
+    assert "asyncio.to_thread(\n            post_reply" in dispatch_src or (
+        "asyncio.to_thread(post_reply" in dispatch_src
+    )
+    assert "\n    post_reply(" not in dispatch_src, "post_reply must not be called directly"
