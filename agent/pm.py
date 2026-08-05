@@ -50,9 +50,11 @@ from .server import (
 )
 from .tools import (
     confluence_attach_image,
+    confluence_file_capture,
     fetch_url,
     github_api,
     graph_api,
+    graph_create_meeting,
     graph_file_content,
     graph_find_recording,
     graph_meeting_transcript,
@@ -276,6 +278,8 @@ async def get_pm_agent(config: RunnableConfig) -> Pregel:
             transcribe_channel_meeting,
             transcribe_recording,
             confluence_attach_image,
+            confluence_file_capture,
+            graph_create_meeting,
             web_search,
             fetch_url,
             http_request,
