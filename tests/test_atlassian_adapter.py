@@ -230,3 +230,45 @@ def test_last_ai_text_prefers_the_final_ai_message():
         ]
     }
     assert last_ai_text(result) == "final answer"
+
+
+def test_confluence_comment_body_is_hydrated_so_mentions_are_visible():
+    """Confluence events carry only the comment id: fetch the body or the
+    mention gate can never fire (found live, 2026-08-05)."""
+    from agent.atlassian_adapter import hydrate_confluence_comment, is_addressed_to_us
+
+    n = normalise(
+        {
+            "eventType": "avi:confluence:created:comment",
+            "content": {"id": "288686083", "title": "Re: probe"},
+            "atlassianId": HUMAN,
+        }
+    )
+    assert is_addressed_to_us(n, APP) is False, "no body yet, nothing to match"
+
+    class _R:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "pageId": "288194578",
+                "body": {
+                    "storage": {
+                        "value": '<p>Hi <ac:link><ri:user ri:account-id="%s" /></ac:link>, '
+                        "what is this page for?</p>" % APP
+                    }
+                },
+            }
+
+    env = {"ATLASSIAN_EMAIL": "a@b.c", "ATLASSIAN_API_TOKEN": "t"}
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.atlassian_adapter.requests.get", return_value=_R()),
+    ):
+        hydrated = hydrate_confluence_comment(n)
+
+    assert APP in hydrated["mentions"]
+    assert "what is this page for?" in hydrated["text"]
+    assert hydrated["page_id"] == "288194578", "reply belongs on the page, not the comment"
+    assert is_addressed_to_us(hydrated, APP) is True
