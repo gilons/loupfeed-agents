@@ -369,3 +369,69 @@ def test_a_mention_on_an_issue_assigned_to_us_still_works():
         "atlassianId": HUMAN,
     }
     assert is_addressed_to_us(normalise(event), APP) is True
+
+
+def test_reply_prefers_the_app_so_the_app_authors_the_comment():
+    """With a reply URL configured the deployment must not use its own
+    Atlassian credential: the comment should be authored by the app."""
+    from agent.atlassian_adapter import post_reply
+
+    calls = []
+
+    class _R:
+        status_code = 200
+        text = ""
+
+    def _post(url, **kw):
+        calls.append((url, kw.get("headers", {}), kw.get("json")))
+        return _R()
+
+    env = {
+        "ATLASSIAN_APP_REPLY_URL": "https://app.example/x1/tok",
+        "ATLASSIAN_APP_SHARED_SECRET": "s3cret",
+        "ATLASSIAN_EMAIL": "a@b.c",
+        "ATLASSIAN_API_TOKEN": "t",
+    }
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.atlassian_adapter.requests.post", side_effect=_post),
+    ):
+        assert post_reply(normalise(COMMENT_EVENT), "Done.") is True
+
+    assert len(calls) == 1, "exactly one call: to the app, not to Atlassian"
+    url, headers, body = calls[0]
+    assert url == "https://app.example/x1/tok"
+    assert headers.get("X-Loupfeed-Secret") == "s3cret"
+    assert body == {"text": "Done.", "issueKey": "SPB-3"}
+
+
+def test_reply_falls_back_to_the_deployment_credential():
+    """If the app path is unavailable, the old credential still works."""
+    from agent.atlassian_adapter import post_reply
+
+    urls = []
+
+    class _Fail:
+        status_code = 502
+        text = "nope"
+
+    class _Ok:
+        status_code = 201
+        text = ""
+
+    def _post(url, **kw):
+        urls.append(url)
+        return _Fail() if "app.example" in url else _Ok()
+
+    env = {
+        "ATLASSIAN_APP_REPLY_URL": "https://app.example/x1/tok",
+        "ATLASSIAN_APP_SHARED_SECRET": "s3cret",
+        "ATLASSIAN_EMAIL": "a@b.c",
+        "ATLASSIAN_API_TOKEN": "t",
+    }
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.atlassian_adapter.requests.post", side_effect=_post),
+    ):
+        assert post_reply(normalise(COMMENT_EVENT), "Done.") is True
+    assert len(urls) == 2 and "/rest/api/3/issue/SPB-3/comment" in urls[1]
