@@ -276,18 +276,57 @@ def _site_base() -> str:
     return os.environ.get("ATLASSIAN_SITE_URL", "https://dinolabgmbh.atlassian.net").rstrip("/")
 
 
+def reply_webtrigger_url() -> str:
+    """Where the entry app listens for replies, when configured."""
+    return os.environ.get("ATLASSIAN_APP_REPLY_URL", "").strip()
+
+
+def _reply_via_app(normalised: dict[str, Any], text: str) -> bool:
+    """Ask the entry app to post the comment, so the APP authors it.
+
+    Preferred over our own credential: the comment shows as the app, and a
+    deployment needs no Atlassian token at all. Returns False if the app has
+    no reply URL configured or the call fails, so the caller can fall back.
+    """
+    url = reply_webtrigger_url()
+    secret = shared_secret()
+    if not url or not secret:
+        return False
+    payload: dict[str, Any] = {"text": text}
+    if normalised.get("issue_key"):
+        payload["issueKey"] = normalised["issue_key"]
+    else:
+        payload["pageId"] = normalised.get("page_id")
+    try:
+        r = requests.post(
+            url,
+            headers={"Content-Type": "application/json", "X-Loupfeed-Secret": secret},
+            json=payload,
+            timeout=_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        logger.warning("atlassian app reply failed: %s: %s", type(exc).__name__, exc)
+        return False
+    if r.status_code >= 400:
+        logger.warning("atlassian app reply failed: %s %s", r.status_code, r.text[:200])
+        return False
+    logger.info("atlassian reply posted by the app for %s", surface_key(normalised))
+    return True
+
+
 def post_reply(normalised: dict[str, Any], text: str) -> bool:
     """Comment the agent's answer back onto the issue or page.
 
-    Uses the agent's own Atlassian credential today; once the entry app's
-    ``asApp()`` path is wired this moves into the Forge app so no token is
-    needed on the deployment at all.
+    Prefers the entry app (comment authored by the app, no credential here);
+    falls back to this deployment's own Atlassian credential.
     """
+    clean = redact_internals(text)[:4000]
+    if _reply_via_app(normalised, clean):
+        return True
     auth = _atlassian_auth()
     if not auth:
-        logger.warning("atlassian reply skipped: no Atlassian credential configured")
+        logger.warning("atlassian reply skipped: no app reply URL and no Atlassian credential")
         return False
-    clean = redact_internals(text)[:4000]
     try:
         if normalised.get("issue_key"):
             r = requests.post(
@@ -320,6 +359,7 @@ def post_reply(normalised: dict[str, Any], text: str) -> bool:
     if r.status_code >= 400:
         logger.warning("atlassian reply failed: %s %s", r.status_code, r.text[:200])
         return False
+    logger.info("atlassian reply posted with the deployment credential")
     return True
 
 
