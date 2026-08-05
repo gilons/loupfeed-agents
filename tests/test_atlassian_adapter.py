@@ -153,6 +153,10 @@ def test_prompts_carry_context_and_the_reply_contract():
 
     coding = build_prompt(normalise(ASSIGN_EVENT), CODING_GRAPH)
     assert "SPB-3" in coding and "pull request" in coding and "issue key" in coding
+    # A stale sandbox clone put an already-merged commit into PR #2494.
+    assert "origin/main" in coding and "only your own commits" in coding.lower()
+    # It also claimed checks passed when none had run.
+    assert "read its actual result" in coding
     pm = build_prompt(normalise(COMMENT_EVENT), PM_GRAPH)
     assert "SPB-3" in pm and "posted as a comment" in pm
     assert "please pick this up" in pm, "the human's own words must reach the agent"
