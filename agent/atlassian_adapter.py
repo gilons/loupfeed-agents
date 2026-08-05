@@ -14,6 +14,7 @@ subscribed event and only some of them are addressed to us.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
 import os
@@ -294,12 +295,13 @@ async def dispatch(normalised: dict[str, Any]) -> None:
         )
     except Exception:
         logger.exception("atlassian dispatch: run failed for %s", surface_key(normalised))
-        post_reply(
+        await asyncio.to_thread(
+            post_reply,
             normalised,
             "Something went wrong while working on that. Giles should check the platform logs.",
         )
         return
-    post_reply(normalised, last_ai_text(result) or "(no reply produced)")
+    await asyncio.to_thread(post_reply, normalised, last_ai_text(result) or "(no reply produced)")
 
 
 def last_ai_text(result: object) -> str:
@@ -329,7 +331,8 @@ async def atlassian_webhook(request: Request, background_tasks: BackgroundTasks)
 
     payload = await request.json()
     event = payload.get("event") or payload
-    normalised = hydrate_confluence_comment(normalise(event))
+    # blockbuster forbids blocking I/O in async routes: hydration does HTTP.
+    normalised = await asyncio.to_thread(hydrate_confluence_comment, normalise(event))
     app_account_id = str(payload.get("appAccountId") or "")
     addressed = is_addressed_to_us(normalised, app_account_id)
 
