@@ -39,6 +39,7 @@ TMP=$(mktemp)
   echo "# --- Atlassian entry app (Forge) shared secret ---"
   echo "ATLASSIAN_APP_SHARED_SECRET=$(get ATLASSIAN_APP_SHARED_SECRET)"
   echo "ATLASSIAN_APP_REPLY_URL=$(get ATLASSIAN_APP_REPLY_URL)"
+  echo "ATLASSIAN_APP_PROXY_URL=$(get ATLASSIAN_APP_PROXY_URL)"
   echo "# --- Org overlay (org-specific values live outside the platform) ---"
   if [ -r /etc/loupfeed/agent.env ]; then cat /etc/loupfeed/agent.env; fi
   echo "# --- GitHub App ---"
