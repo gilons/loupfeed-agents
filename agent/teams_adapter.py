@@ -245,6 +245,34 @@ async def _thread_exists(thread_id: str) -> bool:
         return False
 
 
+# Untagged follow-ups are honored only from the person we are actively talking
+# to, and only briefly. Threads are also where the team banters with each
+# other; a session alone must not turn into a standing subscription.
+FOLLOWUP_WINDOW_SECONDS = 600
+
+# thread id -> (sender key of the last person we engaged with, monotonic time)
+_ACTIVE_EXCHANGES: dict[str, tuple[str, float]] = {}
+
+
+def _sender_key(activity: dict) -> str:
+    sender = activity.get("from") or {}
+    return str(sender.get("aadObjectId") or sender.get("id") or "")
+
+
+def _note_exchange(activity: dict) -> None:
+    key = _sender_key(activity)
+    if key:
+        _ACTIVE_EXCHANGES[langgraph_thread_id(activity)] = (key, time.monotonic())
+
+
+def _in_followup_window(activity: dict) -> bool:
+    entry = _ACTIVE_EXCHANGES.get(langgraph_thread_id(activity))
+    if not entry:
+        return False
+    sender, at = entry
+    return sender == _sender_key(activity) and time.monotonic() - at <= FOLLOWUP_WINDOW_SECONDS
+
+
 async def _is_addressed_to_us(activity: dict) -> bool:
     """Gate every inbound message: only act when the message is meant for us.
 
@@ -253,16 +281,17 @@ async def _is_addressed_to_us(activity: dict) -> bool:
     answers ordinary team chatter. Rules:
 
     - 1:1 chat with the agent: always ours, no mention needed.
-    - Channel thread we're already conversing in: ours, so follow-ups don't need
-      to re-tag us.
+    - Channel thread: an untagged message is ours only when it comes from the
+      person we are currently in an exchange with, within
+      ``FOLLOWUP_WINDOW_SECONDS`` of our last engagement in that thread. A
+      session existing is NOT enough — threads carry team banter between
+      humans, and answering it made the bot reply to everything (observed on
+      the 5 Aug standup thread).
     - Anywhere else (channel top-level, group chat, meeting chat): an explicit
       @mention is required.
 
-    The follow-up exemption is deliberately restricted to real threads. Only
-    channel conversations thread in Teams, and a thread reply carries
-    ``;messageid=`` in its conversation id. Group and meeting chats are flat, so
-    one session covers the whole chat — granting the exemption there makes the
-    first mention turn into a standing subscription to every later message.
+    The follow-up window lives in process memory: after a restart the first
+    follow-up needs one re-tag, which is acceptable.
     """
     conversation = activity.get("conversation") or {}
     if str(conversation.get("conversationType") or "") == "personal":
@@ -271,7 +300,7 @@ async def _is_addressed_to_us(activity: dict) -> bool:
         return True
     if ";messageid=" not in str(conversation.get("id") or ""):
         return False
-    return await _thread_exists(langgraph_thread_id(activity))
+    return _in_followup_window(activity) and await _thread_exists(langgraph_thread_id(activity))
 
 
 def _clean_text(activity: dict) -> str:
@@ -326,6 +355,7 @@ async def _process_message(activity: dict) -> None:
     if not text:
         return
 
+    _note_exchange(activity)
     await _send_typing(activity)
 
     member = await _get_sender_member(activity)
@@ -365,6 +395,8 @@ async def _process_message(activity: dict) -> None:
 
     reply_text = _last_ai_text(result) or "(no reply produced)"
     await _reply(activity, reply_text)
+    # Refresh the window from the reply, so a slow run doesn't eat into it.
+    _note_exchange(activity)
 
 
 def _last_ai_text(result: object) -> str:
