@@ -1,5 +1,6 @@
 from .add_finding import add_finding
 from .confluence_attach_image import confluence_attach_image
+from .confluence_file_capture import confluence_file_capture
 from .fetch_url import fetch_url
 from .github_api import github_api
 from .graph_api import (
@@ -8,6 +9,7 @@ from .graph_api import (
     graph_find_recording,
     graph_meeting_transcript,
 )
+from .graph_create_meeting import graph_create_meeting
 from .http_request import http_request
 from .linear_comment import linear_comment
 from .linear_create_issue import linear_create_issue
@@ -36,6 +38,8 @@ __all__ = [
     "fetch_url",
     "github_api",
     "confluence_attach_image",
+    "confluence_file_capture",
+    "graph_create_meeting",
     "graph_api",
     "graph_file_content",
     "graph_find_recording",
