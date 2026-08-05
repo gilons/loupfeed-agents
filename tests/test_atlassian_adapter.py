@@ -2,9 +2,27 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+import json as jsonlib
+from unittest.mock import MagicMock, patch
 
 from agent.atlassian_adapter import _adf_text, is_addressed_to_us, normalise
+
+
+class _Resp:
+    """Stand-in for AtlassianResponse from the shared Atlassian client."""
+
+    def __init__(self, status_code: int, payload) -> None:
+        self.status_code = status_code
+        self.text = jsonlib.dumps(payload)
+        self.via_app = True
+
+    @property
+    def ok(self) -> bool:
+        return self.status_code < 400
+
+    def json(self):
+        return jsonlib.loads(self.text)
+
 
 APP = "712020:3b1d36e0-61af-4066-bd92-8c391b60657d"
 HUMAN = "712020:55719db7-9d3c-4a20-a490-dfd2b9baab4c"
@@ -268,7 +286,10 @@ def test_confluence_comment_body_is_hydrated_so_mentions_are_visible():
     env = {"ATLASSIAN_EMAIL": "a@b.c", "ATLASSIAN_API_TOKEN": "t"}
     with (
         patch.dict("os.environ", env, clear=False),
-        patch("agent.atlassian_adapter.requests.get", return_value=_R()),
+        patch(
+            "agent.atlassian_adapter.atlassian_request",
+            return_value=_Resp(200, _R.json()),
+        ),
     ):
         hydrated = hydrate_confluence_comment(n)
 
@@ -328,7 +349,10 @@ def test_mention_written_into_a_page_body_is_detected():
     env = {"ATLASSIAN_EMAIL": "a@b.c", "ATLASSIAN_API_TOKEN": "t"}
     with (
         patch.dict("os.environ", env, clear=False),
-        patch("agent.atlassian_adapter.requests.get", return_value=_R()),
+        patch(
+            "agent.atlassian_adapter.atlassian_request",
+            return_value=_Resp(200, _R.json()),
+        ),
     ):
         hydrated = hydrate_confluence(n)
 
@@ -341,9 +365,9 @@ def test_page_hydration_leaves_jira_events_alone():
     from agent.atlassian_adapter import hydrate_confluence
 
     n = normalise(COMMENT_EVENT)
-    with patch("agent.atlassian_adapter.requests.get") as get:
+    with patch("agent.atlassian_adapter.atlassian_request") as req:
         out = hydrate_confluence(n)
-    get.assert_not_called()
+    req.assert_not_called()
     assert out["issue_key"] == "SPB-3"
 
 
@@ -435,3 +459,85 @@ def test_reply_falls_back_to_the_deployment_credential():
     ):
         assert post_reply(normalise(COMMENT_EVENT), "Done.") is True
     assert len(urls) == 2 and "/rest/api/3/issue/SPB-3/comment" in urls[1]
+
+
+def test_reads_go_through_the_app_when_a_proxy_is_configured():
+    """The read paths must prefer the app, so no Atlassian credential is
+    needed on the deployment (asApp end state)."""
+    from agent.utils import atlassian_api
+
+    captured = {}
+
+    class _P:
+        status_code = 200
+        text = jsonlib.dumps({"status": 200, "body": jsonlib.dumps({"title": "PRD"})})
+
+        @staticmethod
+        def json():
+            return jsonlib.loads(_P.text)
+
+    def _post(url, **kw):
+        captured["url"] = url
+        captured["json"] = kw.get("json")
+        captured["headers"] = kw.get("headers")
+        return _P()
+
+    env = {
+        "ATLASSIAN_APP_PROXY_URL": "https://app.example/x1/tok",
+        "ATLASSIAN_APP_SHARED_SECRET": "s3cret",
+        "ATLASSIAN_EMAIL": "a@b.c",
+        "ATLASSIAN_API_TOKEN": "t",
+    }
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.utils.atlassian_api.requests.post", side_effect=_post),
+        patch("agent.utils.atlassian_api.requests.request") as direct,
+    ):
+        r = atlassian_api.atlassian_request("confluence", "GET", "/wiki/api/v2/pages/1")
+
+    direct.assert_not_called()
+    assert r.via_app is True and r.json()["title"] == "PRD"
+    assert captured["headers"]["X-Loupfeed-Secret"] == "s3cret"
+    assert captured["json"]["path"] == "/wiki/api/v2/pages/1"
+
+
+def test_a_refused_path_does_not_silently_fall_back():
+    """403 is an allowlist decision by the app, not a transport failure: the
+    deployment must not widen its own access by retrying with the token."""
+    from agent.utils import atlassian_api
+
+    class _Refused:
+        status_code = 403
+        text = "not allowed"
+
+    env = {
+        "ATLASSIAN_APP_PROXY_URL": "https://app.example/x1/tok",
+        "ATLASSIAN_APP_SHARED_SECRET": "s3cret",
+        "ATLASSIAN_EMAIL": "a@b.c",
+        "ATLASSIAN_API_TOKEN": "t",
+    }
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.utils.atlassian_api.requests.post", return_value=_Refused()),
+        patch("agent.utils.atlassian_api.requests.request") as direct,
+    ):
+        r = atlassian_api.atlassian_request("jira", "DELETE", "/rest/api/3/issue/SPB-1")
+    direct.assert_not_called()
+    assert r.status_code == 403
+
+
+def test_without_a_proxy_the_credential_still_works():
+    from agent.utils import atlassian_api
+
+    ok = MagicMock(status_code=200, text="{}")
+    with (
+        patch.dict(
+            "os.environ",
+            {"ATLASSIAN_APP_PROXY_URL": "", "ATLASSIAN_EMAIL": "a@b.c", "ATLASSIAN_API_TOKEN": "t"},
+            clear=False,
+        ),
+        patch("agent.utils.atlassian_api.requests.request", return_value=ok) as direct,
+    ):
+        r = atlassian_api.atlassian_request("confluence", "GET", "/wiki/api/v2/pages/1")
+    direct.assert_called_once()
+    assert r.via_app is False and r.ok

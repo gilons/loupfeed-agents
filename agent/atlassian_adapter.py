@@ -26,6 +26,7 @@ import requests
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 from langgraph_sdk import get_client
 
+from .utils.atlassian_api import atlassian_request
 from .utils.redact_internals import redact_internals
 
 logger = logging.getLogger(__name__)
@@ -115,19 +116,10 @@ def hydrate_confluence_page(normalised: dict[str, Any]) -> dict[str, Any]:
     if normalised.get("event_type") != "avi:confluence:updated:page":
         return normalised
     page_id = normalised.get("page_id")
-    auth = _atlassian_auth()
-    if not page_id or not auth:
+    if not page_id:
         return normalised
-    try:
-        r = requests.get(
-            f"{_site_base()}/wiki/api/v2/pages/{page_id}?body-format=storage",
-            auth=auth,
-            timeout=_TIMEOUT,
-        )
-    except requests.RequestException as exc:
-        logger.warning("confluence page hydrate failed: %s: %s", type(exc).__name__, exc)
-        return normalised
-    if r.status_code >= 400:
+    r = atlassian_request("confluence", "GET", f"/wiki/api/v2/pages/{page_id}?body-format=storage")
+    if not r.ok:
         logger.warning("confluence page hydrate failed: %s", r.status_code)
         return normalised
     data = r.json()
@@ -149,19 +141,12 @@ def hydrate_confluence_comment(normalised: dict[str, Any]) -> dict[str, Any]:
     if normalised.get("product") != "confluence" or normalised.get("text"):
         return normalised
     comment_id = normalised.get("page_id")
-    auth = _atlassian_auth()
-    if not comment_id or not auth:
+    if not comment_id:
         return normalised
-    try:
-        r = requests.get(
-            f"{_site_base()}/wiki/api/v2/footer-comments/{comment_id}?body-format=storage",
-            auth=auth,
-            timeout=_TIMEOUT,
-        )
-    except requests.RequestException as exc:
-        logger.warning("confluence hydrate failed: %s: %s", type(exc).__name__, exc)
-        return normalised
-    if r.status_code >= 400:
+    r = atlassian_request(
+        "confluence", "GET", f"/wiki/api/v2/footer-comments/{comment_id}?body-format=storage"
+    )
+    if not r.ok:
         logger.warning("confluence hydrate failed: %s", r.status_code)
         return normalised
     data = r.json()
