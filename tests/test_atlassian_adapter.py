@@ -341,3 +341,27 @@ def test_page_hydration_leaves_jira_events_alone():
         out = hydrate_confluence(n)
     get.assert_not_called()
     assert out["issue_key"] == "SPB-3"
+
+
+def test_one_assignment_dispatches_once():
+    """Jira emits assigned:issue AND updated:issue for a single assignment;
+    acting on both ran the coding agent twice (seen live on SPB-5)."""
+    from agent.atlassian_adapter import is_addressed_to_us
+
+    assigned = normalise(ASSIGN_EVENT)
+    updated = normalise({**ASSIGN_EVENT, "eventType": "avi:jira:updated:issue"})
+    assert is_addressed_to_us(assigned, APP) is True
+    assert is_addressed_to_us(updated, APP) is False
+
+
+def test_a_mention_on_an_issue_assigned_to_us_still_works():
+    """The narrower assignment rule must not swallow mentions."""
+    from agent.atlassian_adapter import is_addressed_to_us
+
+    event = {
+        "eventType": "avi:jira:commented:issue",
+        "issue": {"key": "SPB-3", "fields": {"summary": "x", "assignee": {"accountId": APP}}},
+        "comment": {"body": _adf("one more thing ", APP)},
+        "atlassianId": HUMAN,
+    }
+    assert is_addressed_to_us(normalise(event), APP) is True

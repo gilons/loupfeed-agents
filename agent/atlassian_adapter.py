@@ -191,8 +191,11 @@ def is_addressed_to_us(normalised: dict[str, Any], app_account_id: str) -> bool:
         return False
     if app_account_id in normalised.get("mentions", []):
         return True
-    if normalised.get("assignee_account_id") == app_account_id and "assignee" in (
-        normalised.get("changed_fields") or []
+    # Jira emits BOTH assigned:issue and updated:issue for one assignment, so
+    # only the specific event counts or every assignment dispatches twice.
+    if (
+        normalised.get("event_type") == "avi:jira:assigned:issue"
+        and normalised.get("assignee_account_id") == app_account_id
     ):
         return True
     return False
