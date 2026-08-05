@@ -176,7 +176,10 @@ def test_prompts_carry_context_and_the_reply_contract():
     # It also claimed checks passed when none had run.
     assert "read its actual result" in coding
     pm = build_prompt(normalise(COMMENT_EVENT), PM_GRAPH)
-    assert "SPB-3" in pm and "posted as a comment" in pm
+    assert "SPB-3" in pm and "posted for you" in pm
+    # It answered twice in testing: once with its own tools, once via the adapter.
+    assert "Do NOT post a comment yourself" in pm
+    assert "do NOT comment on the issue yourself" in coding
     assert "please pick this up" in pm, "the human's own words must reach the agent"
 
 

@@ -236,17 +236,20 @@ def build_prompt(normalised: dict[str, Any], graph: str) -> str:
             "did not write, you branched from the wrong place, so start over from origin/main.\n\n"
             "Read the issue with your Atlassian tools, implement the fix in the "
             "bound repository, and open a pull request whose title carries the issue key. "
-            "Then summarise what you did in one short paragraph: that summary is posted "
-            "back as a comment on the issue, so write it for the reporter, not for a log. "
+            "Then summarise what you did in one short paragraph as your final message: "
+            "the platform posts it as a comment on the issue for you, so write it for the "
+            "reporter, not for a log, and do NOT comment on the issue yourself. "
             "Never claim a check or test passed unless you read its actual result.\n"
             + (f"\nThe request said: {asked}\n" if asked else "")
         )
     return (
         f"You were mentioned on {where}"
         + (f' ("{title}")' if title else "")
-        + ".\n\nRead it with your Atlassian tools before answering, and reply for a "
-        "chat-length comment: lead with the answer or the action you took. "
-        "Your reply is posted as a comment on that item.\n"
+        + ".\n\nRead it with your Atlassian tools before answering, and write a "
+        "chat-length answer: lead with the answer or the action you took.\n\n"
+        "Do NOT post a comment yourself. Your final message is posted for you, as a "
+        "comment on that item, by the platform. Commenting as well produces two "
+        "answers, which happened in testing.\n"
         + (f"\nThe request said: {asked}\n" if asked else "")
     )
 
