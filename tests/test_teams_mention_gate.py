@@ -13,13 +13,21 @@ from agent import teams_adapter
 BOT_APP_ID = "80a79e55-421e-469d-a3bd-9a36f07803ea"
 
 
-def _activity(*, conv_type: str, conv_id: str, entities=None, activity_id: str = "m1") -> dict:
+def _activity(
+    *,
+    conv_type: str,
+    conv_id: str,
+    entities=None,
+    activity_id: str = "m1",
+    sender_id: str = "29:giles-aad",
+) -> dict:
     return {
         "type": "message",
         "id": activity_id,
         "text": "what did we decide?",
         "conversation": {"id": conv_id, "conversationType": conv_type},
         "recipient": {"id": f"28:{BOT_APP_ID}"},
+        "from": {"id": sender_id, "name": "Giles"},
         "entities": entities or [],
     }
 
@@ -101,11 +109,49 @@ async def test_personal_chat_needs_no_mention(_no_sessions):
     assert await teams_adapter._is_addressed_to_us(activity) is True
 
 
+@pytest.fixture(autouse=True)
+def _fresh_exchanges():
+    teams_adapter._ACTIVE_EXCHANGES.clear()
+    yield
+    teams_adapter._ACTIVE_EXCHANGES.clear()
+
+
 @pytest.mark.asyncio
-async def test_followup_in_engaged_thread_needs_no_mention(_engaged):
-    """Once we're in a thread, replies continue the conversation untagged."""
+async def test_followup_within_window_needs_no_mention(_engaged):
+    """The person we're talking to can follow up untagged for a short while."""
     activity = _activity(conv_type="channel", conv_id="19:chan@thread.tacv2;messageid=1700")
+    teams_adapter._note_exchange(activity)
     assert await teams_adapter._is_addressed_to_us(activity) is True
+
+
+@pytest.mark.asyncio
+async def test_thread_session_alone_grants_nothing(_engaged):
+    """The 5 Aug standup-thread regression: a session existing must not make
+    every thread message ours — team banter lives in the same threads."""
+    activity = _activity(conv_type="channel", conv_id="19:chan@thread.tacv2;messageid=1700")
+    assert await teams_adapter._is_addressed_to_us(activity) is False
+
+
+@pytest.mark.asyncio
+async def test_other_person_in_window_still_needs_mention(_engaged):
+    conv = "19:chan@thread.tacv2;messageid=1700"
+    teams_adapter._note_exchange(_activity(conv_type="channel", conv_id=conv))
+    stephan = _activity(conv_type="channel", conv_id=conv, sender_id="29:stephan-aad")
+    assert await teams_adapter._is_addressed_to_us(stephan) is False
+
+
+@pytest.mark.asyncio
+async def test_followup_after_window_expiry_needs_mention(_engaged, monkeypatch):
+    conv = "19:chan@thread.tacv2;messageid=1700"
+    activity = _activity(conv_type="channel", conv_id=conv)
+    teams_adapter._note_exchange(activity)
+    thread = teams_adapter.langgraph_thread_id(activity)
+    sender, at = teams_adapter._ACTIVE_EXCHANGES[thread]
+    teams_adapter._ACTIVE_EXCHANGES[thread] = (
+        sender,
+        at - teams_adapter.FOLLOWUP_WINDOW_SECONDS - 1,
+    )
+    assert await teams_adapter._is_addressed_to_us(activity) is False
 
 
 @pytest.mark.asyncio
