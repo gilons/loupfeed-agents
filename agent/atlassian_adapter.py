@@ -17,6 +17,7 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import re
 import uuid
 from typing import Any
 
@@ -97,6 +98,46 @@ def normalise(event: dict[str, Any]) -> dict[str, Any]:
         "mentions": _mention_ids(body),
         "changed_fields": [i.get("field") for i in (event.get("changelog") or {}).get("items", [])],
     }
+
+
+_STORAGE_MENTION = re.compile(r'ri:account-id="([^"]+)"')
+_TAGS = re.compile(r"<[^>]+>")
+
+
+def hydrate_confluence_comment(normalised: dict[str, Any]) -> dict[str, Any]:
+    """Fill in a Confluence comment's body, which its event does not carry.
+
+    Jira comment events ship the full ADF body; Confluence events ship only
+    the comment id, so a mention is invisible until the body is fetched.
+    Without this the gate can never see a Confluence mention.
+    """
+    if normalised.get("product") != "confluence" or normalised.get("text"):
+        return normalised
+    comment_id = normalised.get("page_id")
+    auth = _atlassian_auth()
+    if not comment_id or not auth:
+        return normalised
+    try:
+        r = requests.get(
+            f"{_site_base()}/wiki/api/v2/footer-comments/{comment_id}?body-format=storage",
+            auth=auth,
+            timeout=_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        logger.warning("confluence hydrate failed: %s: %s", type(exc).__name__, exc)
+        return normalised
+    if r.status_code >= 400:
+        logger.warning("confluence hydrate failed: %s", r.status_code)
+        return normalised
+    data = r.json()
+    storage = str(((data.get("body") or {}).get("storage") or {}).get("value") or "")
+    normalised["mentions"] = _STORAGE_MENTION.findall(storage)
+    normalised["text"] = _TAGS.sub(" ", storage).strip() or None
+    # The comment hangs off a page; that page is the surface we reply on.
+    parent = str(data.get("pageId") or "")
+    if parent:
+        normalised["page_id"] = parent
+    return normalised
 
 
 def is_addressed_to_us(normalised: dict[str, Any], app_account_id: str) -> bool:
@@ -288,7 +329,7 @@ async def atlassian_webhook(request: Request, background_tasks: BackgroundTasks)
 
     payload = await request.json()
     event = payload.get("event") or payload
-    normalised = normalise(event)
+    normalised = hydrate_confluence_comment(normalise(event))
     app_account_id = str(payload.get("appAccountId") or "")
     addressed = is_addressed_to_us(normalised, app_account_id)
 
