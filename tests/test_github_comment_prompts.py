@@ -60,9 +60,9 @@ def test_construct_system_prompt_does_not_require_pr_for_questions() -> None:
 
     assert "Do not create commits, branches, or pull requests for questions" in prompt
     assert "For information-only requests" in prompt
-    assert "open or update a draft PR when the user asks for one" in prompt
+    assert "open or update a PR when the user asks for one" in prompt
     assert "Always Create PRs Policy Override" not in prompt
-    assert "Always push, open/update the draft PR" not in prompt
+    assert "Always push, open/update the PR" not in prompt
 
 
 def test_construct_system_prompt_includes_always_create_prs_override() -> None:

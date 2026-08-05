@@ -376,3 +376,21 @@ def test_derive_pr_state_draft() -> None:
 
 def test_derive_pr_state_open() -> None:
     assert opr.derive_pr_state(state="open", merged=False, draft=False) == "open"
+
+
+def test_pull_requests_open_ready_for_review_not_draft():
+    """Draft PRs kept CI and reviewers idle until a human intervened, so the
+    coding agent opens PRs ready for review and then iterates on the result."""
+    import inspect
+
+    from agent.tools.open_pull_request import open_pull_request
+
+    assert inspect.signature(open_pull_request).parameters["draft"].default is False
+
+
+def test_prompt_requires_reading_real_check_results():
+    from agent.prompt import construct_system_prompt
+
+    prompt = construct_system_prompt(working_dir="/workspace")
+    assert "gh pr checks" in prompt
+    assert "Never state a check or test result you have not read" in prompt
