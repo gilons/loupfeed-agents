@@ -21,6 +21,7 @@ from langgraph_sdk import get_client
 from langgraph_sdk.client import LangGraphClient
 
 from .ci_autofix import handle_ci_failure, handle_review_feedback
+from .atlassian_adapter import router as atlassian_router
 from .connector_routes import router as connector_router
 from .teams_adapter import router as teams_router
 from .teams_tab import router as teams_tab_router
@@ -164,6 +165,7 @@ app.include_router(dashboard_router)
 app.include_router(connector_router)
 app.include_router(teams_router)
 app.include_router(teams_tab_router)
+app.include_router(atlassian_router)
 
 LINEAR_WEBHOOK_SECRET = os.environ.get("LINEAR_WEBHOOK_SECRET", "")
 GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
@@ -2921,7 +2923,9 @@ async def process_github_pr_comment(payload: dict[str, Any], event_type: str) ->
         github_token = await get_github_app_installation_token()
         logger.info("Unmapped org member '%s' allowed (bot-token mode)", github_login)
     else:
-        logger.warning("No email mapping and not an allowed org member '%s', skipping", github_login)
+        logger.warning(
+            "No email mapping and not an allowed org member '%s', skipping", github_login
+        )
         return
 
     if not github_token:
@@ -3198,7 +3202,9 @@ async def process_github_issue(payload: dict[str, Any], event_type: str) -> None
             email = github_login + "@users.noreply.github.com"
             logger.info("Unmapped org member '%s' allowed (bot-token mode)", github_login)
         else:
-            logger.warning("No email mapping and not an allowed org member '%s', skipping", github_login)
+            logger.warning(
+                "No email mapping and not an allowed org member '%s', skipping", github_login
+            )
             return
 
     thread_id = generate_thread_id_from_github_issue(issue_id)
@@ -3421,7 +3427,10 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks) ->
         issue_text = f"{issue.get('title', '')}\n\n{issue.get('body', '')}".lower()
         if not any(tag in issue_text for tag in OPEN_SWE_TAGS):
             logger.info("Ignoring issue that does not mention @loupfeed (or legacy @openswe)")
-            return {"status": "ignored", "reason": "Issue does not mention @loupfeed (or legacy @openswe)"}
+            return {
+                "status": "ignored",
+                "reason": "Issue does not mention @loupfeed (or legacy @openswe)",
+            }
 
         gate_rejection = await _enforce_public_repo_org_gate(payload, event_type)
         if gate_rejection is not None:
@@ -3486,7 +3495,10 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks) ->
             event_type,
             f" action={action}" if action else "",
         )
-        return {"status": "ignored", "reason": "Comment does not mention @loupfeed (or legacy @openswe)"}
+        return {
+            "status": "ignored",
+            "reason": "Comment does not mention @loupfeed (or legacy @openswe)",
+        }
 
     gate_rejection = await _enforce_public_repo_org_gate(payload, event_type)
     if gate_rejection is not None:
