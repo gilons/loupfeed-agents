@@ -10,23 +10,21 @@ Folder titles are unique per SPACE in Confluence, not per parent — a bare
 prefixed with the purpose slug (``standups 2026-08-05``, ``issues 2026-07``):
 two purposes can then hold the same date without colliding.
 
-Auth: ``ATLASSIAN_EMAIL`` + ``ATLASSIAN_API_TOKEN`` Basic auth, same as
-``confluence_attach_image``.
+Requests go through ``utils.atlassian_api``, so the entry app performs them
+with ``asApp()`` where its identity matters and the deployment's own
+credential covers the rest.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import re
 import urllib.parse
 from typing import Any
 
-import requests
+from ..utils.atlassian_api import atlassian_request
 
 logger = logging.getLogger(__name__)
-
-_TIMEOUT = 30
 
 
 def _fail(reason: str, *, detail: str = "") -> dict[str, Any]:
@@ -35,52 +33,32 @@ def _fail(reason: str, *, detail: str = "") -> dict[str, Any]:
     return {"ok": False, "reason": reason}
 
 
-def _auth() -> tuple[str, str] | None:
-    email = os.environ.get("ATLASSIAN_EMAIL", "")
-    token = os.environ.get("ATLASSIAN_API_TOKEN", "")
-    return (email, token) if email and token else None
-
-
-def _site_base() -> str:
-    return os.environ.get("ATLASSIAN_SITE_URL", "https://dinolabgmbh.atlassian.net").rstrip("/")
-
-
-def _find_folder(auth: tuple[str, str], space_key: str, title: str) -> str | None:
+def _find_folder(space_key: str, title: str) -> str | None:
     cql = urllib.parse.quote(f'space={space_key} and type=folder and title="{title}"')
-    r = requests.get(
-        f"{_site_base()}/wiki/rest/api/content/search?cql={cql}&limit=2",
-        auth=auth,
-        timeout=_TIMEOUT,
-    )
-    if r.status_code != 200:
+    r = atlassian_request("confluence", "GET", f"/wiki/rest/api/content/search?cql={cql}&limit=2")
+    if not r.ok:
         return None
     results = r.json().get("results", [])
     return str(results[0]["id"]) if results else None
 
 
-def _space_id(auth: tuple[str, str], space_key: str) -> str | None:
-    r = requests.get(
-        f"{_site_base()}/wiki/api/v2/spaces?keys={space_key}", auth=auth, timeout=_TIMEOUT
-    )
-    if r.status_code != 200:
+def _space_id(space_key: str) -> str | None:
+    r = atlassian_request("confluence", "GET", f"/wiki/api/v2/spaces?keys={space_key}")
+    if not r.ok:
         return None
     results = r.json().get("results", [])
     return str(results[0]["id"]) if results else None
 
 
-def _ensure_folder(
-    auth: tuple[str, str], space_key: str, space_id: str, title: str, parent_id: str | None
-) -> str | None:
-    r = requests.post(
-        f"{_site_base()}/wiki/api/v2/folders",
-        auth=auth,
-        json={"spaceId": space_id, "parentId": parent_id, "title": title},
-        timeout=_TIMEOUT,
-    )
-    if r.status_code < 400:
+def _ensure_folder(space_key: str, space_id: str, title: str, parent_id: str | None) -> str | None:
+    body: dict[str, Any] = {"spaceId": space_id, "title": title}
+    if parent_id:
+        body["parentId"] = parent_id
+    r = atlassian_request("confluence", "POST", "/wiki/api/v2/folders", body, attributed=True)
+    if r.ok:
         return str(r.json()["id"])
     # 400 "A folder exists with the same title in this space" — find it instead.
-    return _find_folder(auth, space_key, title)
+    return _find_folder(space_key, title)
 
 
 def confluence_file_capture(
@@ -110,41 +88,39 @@ def confluence_file_capture(
         return _fail("The date must look like 2026-08-05.")
     if not page_id or not purpose_folder:
         return _fail("I need the page and the purpose folder to file it.")
-    auth = _auth()
-    if not auth:
-        return _fail(
-            "I can't file pages in Confluence — my access there isn't set up for it.",
-            detail="ATLASSIAN_EMAIL/ATLASSIAN_API_TOKEN not set",
-        )
 
-    space_id = _space_id(auth, space_key)
+    space_id = _space_id(space_key)
     if not space_id:
-        return _fail(f"I couldn't find the {space_key} space.")
+        return _fail(
+            f"I couldn't find the {space_key} space.",
+            detail="space lookup failed; check Atlassian access",
+        )
 
     slug = re.sub(r"[^a-z0-9]+", "-", purpose_folder.lower()).strip("-")
     year, month = date[:4], date[:7]
 
-    purpose_id = _find_folder(auth, space_key, purpose_folder) or _ensure_folder(
-        auth, space_key, space_id, purpose_folder, None
+    purpose_id = _find_folder(space_key, purpose_folder) or _ensure_folder(
+        space_key, space_id, purpose_folder, None
     )
     if not purpose_id:
         return _fail(f'I couldn\'t find or create the "{purpose_folder}" folder.')
 
     parent = purpose_id
     for title in (f"{slug} {year}", f"{slug} {month}", f"{slug} {date}"):
-        parent = _ensure_folder(auth, space_key, space_id, title, parent)
+        parent = _ensure_folder(space_key, space_id, title, parent)
         if not parent:
             return _fail(
                 f'I couldn\'t create the "{title}" folder.',
-                detail=f"ensure_folder returned none under parent chain for {date}",
+                detail=f"ensure_folder returned none in the chain for {date}",
             )
 
-    mv = requests.put(
-        f"{_site_base()}/wiki/rest/api/content/{page_id}/move/append/{parent}",
-        auth=auth,
-        timeout=_TIMEOUT,
+    mv = atlassian_request(
+        "confluence",
+        "PUT",
+        f"/wiki/rest/api/content/{page_id}/move/append/{parent}",
+        attributed=True,
     )
-    if mv.status_code >= 400:
+    if not mv.ok:
         return _fail(
             "I couldn't move the page into its date folder.",
             detail=f"move -> {mv.status_code}: {mv.text[:200]}",
