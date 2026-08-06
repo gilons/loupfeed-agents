@@ -15,6 +15,7 @@ Auth: Graph app token for the fetch (the app is installed in that conversation),
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import re
@@ -22,6 +23,7 @@ from typing import Any
 
 import requests
 
+from ..utils.atlassian_api import use_app_for
 from ..utils.msgraph import GRAPH_BASE, get_graph_app_token
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,51 @@ def _safe_filename(name: str, mime: str) -> str:
     if "." not in stem:
         stem = f"{stem}.{_EXT_BY_MIME.get(mime, 'png')}"
     return stem[:120]
+
+
+# Forge caps web-trigger payloads, and base64 inflates by a third, so only
+# comfortably small images take the app path; larger ones stay on the
+# deployment's own credential rather than failing.
+_APP_ATTACH_LIMIT_BYTES = 600 * 1024
+
+
+def app_attach_url() -> str:
+    return os.environ.get("ATLASSIAN_APP_ATTACH_URL", "").strip()
+
+
+def _attach_via_app(page_id: str, name: str, mime: str, data: bytes) -> bool:
+    """Upload through the entry app so the attachment is owned by the app."""
+    url = app_attach_url()
+    secret = os.environ.get("ATLASSIAN_APP_SHARED_SECRET", "")
+    if not url or not secret or not use_app_for(attributed=True):
+        return False
+    if len(data) > _APP_ATTACH_LIMIT_BYTES:
+        logger.info(
+            "attachment %s is %d KB, above the app path limit; using the deployment credential",
+            name,
+            len(data) // 1024,
+        )
+        return False
+    try:
+        r = requests.post(
+            url,
+            headers={"Content-Type": "application/json", "X-Loupfeed-Secret": secret},
+            json={
+                "pageId": str(page_id),
+                "filename": name,
+                "contentType": mime,
+                "dataBase64": base64.b64encode(data).decode(),
+            },
+            timeout=_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        logger.warning("app attach failed: %s: %s", type(exc).__name__, exc)
+        return False
+    if r.status_code >= 400:
+        logger.warning("app attach failed: %s %s", r.status_code, r.text[:200])
+        return False
+    logger.info("attachment %s uploaded by the app", name)
+    return True
 
 
 def confluence_attach_image(page_id: str, image_url: str, filename: str = "") -> dict[str, Any]:
@@ -122,6 +169,14 @@ def confluence_attach_image(page_id: str, image_url: str, filename: str = "") ->
         )
     name = _safe_filename(filename, mime)
 
+    if _attach_via_app(page_id, name, mime, data):
+        return _attached(name, data, page_id)
+
+    if not auth:
+        return _fail(
+            "I can't attach files to Confluence — my access there isn't set up for it.",
+            detail="app attach unavailable and no ATLASSIAN_EMAIL/ATLASSIAN_API_TOKEN",
+        )
     base = _site_base()
     try:
         up = requests.post(
@@ -141,6 +196,10 @@ def confluence_attach_image(page_id: str, image_url: str, filename: str = "") ->
             detail=f"attachment upload -> {up.status_code}: {up.text[:300]}",
         )
 
+    return _attached(name, data, page_id)
+
+
+def _attached(name: str, data: bytes, page_id: str) -> dict[str, Any]:
     return {
         "ok": True,
         "filename": name,
