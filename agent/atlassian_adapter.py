@@ -26,7 +26,7 @@ import requests
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 from langgraph_sdk import get_client
 
-from .utils.atlassian_api import atlassian_request
+from .utils.atlassian_api import atlassian_request, use_app_for
 from .utils.redact_internals import redact_internals
 
 logger = logging.getLogger(__name__)
@@ -276,6 +276,8 @@ def _reply_via_app(normalised: dict[str, Any], text: str) -> bool:
     deployment needs no Atlassian token at all. Returns False if the app has
     no reply URL configured or the call fails, so the caller can fall back.
     """
+    if not use_app_for(attributed=True):
+        return False
     url = reply_webtrigger_url()
     secret = shared_secret()
     if not url or not secret:

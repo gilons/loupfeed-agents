@@ -37,6 +37,41 @@ class AtlassianResponse:
         return self.status_code < 400
 
 
+# Routing preference between the two credentials we can hold.
+#
+#   app             - always the Forge app when it is configured. Cleanest
+#                     identity, but every call is a Forge function invocation
+#                     billed against the app's free allowance.
+#   service_account - always the deployment's own token. Zero Forge usage,
+#                     but writes are then authored by that account.
+#   auto (default)  - the app for anything a human will SEE the author of
+#                     (comments, page and issue writes), the service account
+#                     for invisible reads. Keeps attribution clean while
+#                     leaving Forge usage proportional to actual output.
+AUTH_APP = "app"
+AUTH_SERVICE_ACCOUNT = "service_account"
+AUTH_AUTO = "auto"
+
+
+def auth_preference() -> str:
+    value = os.environ.get("ATLASSIAN_AUTH_PREFERENCE", "").strip().lower()
+    return value if value in (AUTH_APP, AUTH_SERVICE_ACCOUNT, AUTH_AUTO) else AUTH_AUTO
+
+
+def use_app_for(*, attributed: bool) -> bool:
+    """Whether this call should go through the app.
+
+    ``attributed`` means the result is visible to people with an author on
+    it, so the identity matters. Reads are not attributed.
+    """
+    preference = auth_preference()
+    if preference == AUTH_APP:
+        return True
+    if preference == AUTH_SERVICE_ACCOUNT:
+        return False
+    return attributed
+
+
 def proxy_url() -> str:
     return os.environ.get("ATLASSIAN_APP_PROXY_URL", "").strip()
 
@@ -87,20 +122,34 @@ def _via_app(product: str, method: str, path: str, body: Any | None) -> Atlassia
 
 
 def atlassian_request(
-    product: str, method: str, path: str, body: Any | None = None
+    product: str,
+    method: str,
+    path: str,
+    body: Any | None = None,
+    *,
+    attributed: bool = False,
 ) -> AtlassianResponse:
-    """Perform an Atlassian request, preferring the entry app.
+    """Perform an Atlassian request via whichever credential should own it.
 
     Args:
         product: ``"jira"`` or ``"confluence"``.
         method: HTTP method.
         path: Site-relative path, e.g. ``/wiki/api/v2/pages/123?body-format=storage``.
         body: JSON body, when the method takes one.
+        attributed: True when people will see an author on the result, so the
+            app should own it unless configured otherwise.
     """
     method = method.upper()
-    through_app = _via_app(product, method, path, body)
-    if through_app is not None:
-        return through_app
+    if use_app_for(attributed=attributed):
+        through_app = _via_app(product, method, path, body)
+        if through_app is not None:
+            return through_app
+    elif not basic_auth():
+        # Asked for the service account but there is none: the app is better
+        # than failing, so try it before giving up.
+        through_app = _via_app(product, method, path, body)
+        if through_app is not None:
+            return through_app
 
     auth = basic_auth()
     if not auth:

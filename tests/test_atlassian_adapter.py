@@ -490,6 +490,7 @@ def test_reads_go_through_the_app_when_a_proxy_is_configured():
         "ATLASSIAN_APP_SHARED_SECRET": "s3cret",
         "ATLASSIAN_EMAIL": "a@b.c",
         "ATLASSIAN_API_TOKEN": "t",
+        "ATLASSIAN_AUTH_PREFERENCE": "app",
     }
     with (
         patch.dict("os.environ", env, clear=False),
@@ -518,6 +519,7 @@ def test_a_refused_path_does_not_silently_fall_back():
         "ATLASSIAN_APP_SHARED_SECRET": "s3cret",
         "ATLASSIAN_EMAIL": "a@b.c",
         "ATLASSIAN_API_TOKEN": "t",
+        "ATLASSIAN_AUTH_PREFERENCE": "app",
     }
     with (
         patch.dict("os.environ", env, clear=False),
@@ -544,3 +546,71 @@ def test_without_a_proxy_the_credential_still_works():
         r = atlassian_api.atlassian_request("confluence", "GET", "/wiki/api/v2/pages/1")
     direct.assert_called_once()
     assert r.via_app is False and r.ok
+
+
+# --- credential routing: identity where it shows, cheap where it does not ---
+
+
+def _routing_env(preference: str) -> dict[str, str]:
+    return {
+        "ATLASSIAN_APP_PROXY_URL": "https://app.example/x1/tok",
+        "ATLASSIAN_APP_SHARED_SECRET": "s3cret",
+        "ATLASSIAN_EMAIL": "a@b.c",
+        "ATLASSIAN_API_TOKEN": "t",
+        "ATLASSIAN_AUTH_PREFERENCE": preference,
+    }
+
+
+def test_auto_sends_visible_writes_to_the_app_and_reads_to_the_token():
+    """The default: attribution where people see an author, no Forge
+    invocation for invisible reads (keeps usage inside the free allowance)."""
+    from agent.utils.atlassian_api import use_app_for
+
+    with patch.dict("os.environ", _routing_env("auto"), clear=False):
+        assert use_app_for(attributed=True) is True
+        assert use_app_for(attributed=False) is False
+
+
+def test_explicit_app_preference_routes_everything_through_forge():
+    from agent.utils.atlassian_api import use_app_for
+
+    with patch.dict("os.environ", _routing_env("app"), clear=False):
+        assert use_app_for(attributed=True) is True
+        assert use_app_for(attributed=False) is True
+
+
+def test_explicit_service_account_preference_avoids_forge_entirely():
+    from agent.utils.atlassian_api import use_app_for
+
+    with patch.dict("os.environ", _routing_env("service_account"), clear=False):
+        assert use_app_for(attributed=True) is False
+        assert use_app_for(attributed=False) is False
+
+
+def test_an_unknown_preference_falls_back_to_auto():
+    from agent.utils.atlassian_api import auth_preference
+
+    with patch.dict("os.environ", _routing_env("nonsense"), clear=False):
+        assert auth_preference() == "auto"
+
+
+def test_service_account_preference_still_uses_the_app_when_no_token_exists():
+    """Preferring the service account must not mean failing without one."""
+    from agent.utils import atlassian_api
+
+    class _P:
+        status_code = 200
+        text = jsonlib.dumps({"status": 200, "body": "{}"})
+
+        @staticmethod
+        def json():
+            return jsonlib.loads(_P.text)
+
+    env = {**_routing_env("service_account"), "ATLASSIAN_EMAIL": "", "ATLASSIAN_API_TOKEN": ""}
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.utils.atlassian_api.requests.post", return_value=_P()) as proxied,
+    ):
+        r = atlassian_api.atlassian_request("confluence", "GET", "/wiki/api/v2/pages/1")
+    proxied.assert_called_once()
+    assert r.via_app is True
