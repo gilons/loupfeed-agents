@@ -1,0 +1,19 @@
+[
+  {
+    "key": "acme-webapp",
+    "repo": "acme/acme",
+    "path_root": "apps/webapp",
+    "jira_projects": ["BUG"],
+    "loupfeed": {
+      "api": "https://loupfeed.acme.dev",
+      "org": "acme",
+      "project": "acme",
+      "token_env": "LOUPFEED_DASHBOARD_TOKEN"
+    }
+  },
+  {
+    "key": "acme-admin",
+    "repo": "acme/admin",
+    "jira_projects": ["ADMBUG"]
+  }
+]

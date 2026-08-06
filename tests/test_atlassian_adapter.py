@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json as jsonlib
+import os
+import tempfile
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 from agent.atlassian_adapter import _adf_text, is_addressed_to_us, normalise
@@ -151,9 +154,84 @@ def test_assignment_routes_to_the_coding_agent():
 
 
 def test_mention_routes_to_the_pm_agent():
+    """A mention on an issue no surface claims is a question, not a bug report."""
     from agent.atlassian_adapter import PM_GRAPH, route
 
-    assert route(normalise(COMMENT_EVENT)) == PM_GRAPH
+    with _registry([]):
+        assert route(normalise(COMMENT_EVENT)) == PM_GRAPH
+
+
+@contextmanager
+def _registry(entries):
+    """Point the surface registry at a temporary file for the duration."""
+    from agent import surfaces
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+        jsonlib.dump(entries, handle)
+        path = handle.name
+    surfaces._cache = None
+    original = surfaces.SURFACES_FILE
+    surfaces.SURFACES_FILE = path
+    try:
+        yield
+    finally:
+        surfaces.SURFACES_FILE = original
+        surfaces._cache = None
+        os.unlink(path)
+
+
+_BUG_SURFACE = [{"key": "acme-webapp", "repo": "acme/acme", "jira_projects": ["SPB"]}]
+
+
+def test_a_mention_on_a_mapped_bug_project_routes_to_triage():
+    """The registry mapping a Jira project to a repo is what declares it a bug project."""
+    from agent.atlassian_adapter import TRIAGE_GRAPH, route
+
+    with _registry(_BUG_SURFACE):
+        assert route(normalise(COMMENT_EVENT)) == TRIAGE_GRAPH
+
+
+def test_assignment_still_wins_over_triage():
+    """Assigning is the "go fix it" contract; triage must not intercept it."""
+    from agent.atlassian_adapter import CODING_GRAPH, route
+
+    with _registry(_BUG_SURFACE):
+        assert route(normalise(ASSIGN_EVENT)) == CODING_GRAPH
+
+
+def test_triage_dispatch_carries_the_surface_so_the_graph_knows_the_repo():
+    from agent.atlassian_adapter import TRIAGE_GRAPH, route
+    from agent.surfaces import surface_for_issue
+
+    with _registry(_BUG_SURFACE):
+        normalised = normalise(COMMENT_EVENT)
+        assert route(normalised) == TRIAGE_GRAPH
+        assert surface_for_issue(normalised["issue_key"])["key"] == "acme-webapp"
+
+
+def test_triage_prompt_states_the_procedure_and_the_honesty_rules():
+    from agent.atlassian_adapter import TRIAGE_GRAPH, build_prompt
+
+    prompt = build_prompt(normalise(COMMENT_EVENT), TRIAGE_GRAPH)
+    assert "SPB-3" in prompt
+    # The two mistakes that produce a confident wrong pin.
+    assert "diff you have not read" in prompt
+    assert "other than the release" in prompt
+    # Same double-answer lesson as the pm path.
+    assert "do NOT comment on the issue yourself" in prompt
+    assert "please pick this up" in prompt, "the human's own words must reach the agent"
+
+
+def test_issue_type_is_normalised_for_reporting():
+    event = {
+        **COMMENT_EVENT,
+        "issue": {
+            "key": "SPB-3",
+            "fields": {"summary": "Broken export", "issuetype": {"name": "Bug"}},
+        },
+    }
+    assert normalise(event)["issue_type"] == "Bug"
+    assert normalise(COMMENT_EVENT)["issue_type"] is None
 
 
 def test_thread_id_is_stable_per_item_and_distinct_across_items():
