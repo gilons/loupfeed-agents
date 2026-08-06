@@ -45,12 +45,18 @@ USER_AGENT = os.environ.get("LOUPFEED_USER_AGENT", "loupfeed-agents/1.0 (+https:
 def prefer_token_auth() -> bool:
     """Whether a configured API token outranks a stored OAuth grant.
 
-    Token auth is the supported machine-to-machine path for the Atlassian MCP
-    server and needs no interactive consent, no dynamic client registration
-    and no per-org callback-domain allowlist, so it is preferred by default.
-    Set LOUPFEED_MCP_PREFER_OAUTH=1 to go back to the OAuth grant.
+    OFF by default, and measured rather than assumed: the Atlassian MCP server
+    accepts API-token auth (the handshake returns 200) but the resulting
+    session exposed only 3 tools — Teamwork Graph, no Jira or Confluence —
+    against ~40 under an OAuth grant, because product scopes are not
+    available on the token path. Preferring the token would therefore strip
+    the pm agent's toolset silently.
+
+    Set LOUPFEED_MCP_PREFER_TOKEN=1 to opt in, which is worth retrying when
+    Atlassian adds product scopes to token auth: at that point this flag is
+    the whole migration.
     """
-    return os.environ.get("LOUPFEED_MCP_PREFER_OAUTH", "").strip() not in ("1", "true", "yes")
+    return os.environ.get("LOUPFEED_MCP_PREFER_TOKEN", "").strip() in ("1", "true", "yes")
 
 
 def token_headers(name: str) -> dict[str, str] | None:

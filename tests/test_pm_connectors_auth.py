@@ -1,9 +1,9 @@
 """MCP connector auth: token-first, with the Cloudflare-safe User-Agent.
 
-Atlassian supports API-token auth for the Rovo MCP server, which needs no
-interactive consent, no DCR client and no per-org callback allowlist, so a
-configured token outranks a stored OAuth grant. Cloudflare 403s (error 1010)
-any request whose User-Agent looks like a bare HTTP library.
+Token auth works against the Rovo MCP server but exposes only 3 tools
+(Teamwork Graph) versus ~40 under an OAuth grant, so OAuth stays preferred
+and the token path is opt-in. Cloudflare 403s (error 1010) any request whose
+User-Agent looks like a bare HTTP library.
 """
 
 from __future__ import annotations
@@ -37,12 +37,28 @@ def test_other_connectors_have_no_token_path():
 
 
 @pytest.mark.asyncio
-async def test_token_auth_is_preferred_over_a_stored_oauth_grant():
+async def test_oauth_wins_by_default_even_with_a_token_configured():
+    """Token auth would silently cut the toolset from ~40 tools to 3."""
+
     async def _oauth(_name):
         return "oauth-token"
 
     with (
-        patch.dict("os.environ", TOKEN_ENV, clear=False),
+        patch.dict("os.environ", {**TOKEN_ENV, "LOUPFEED_MCP_PREFER_TOKEN": ""}, clear=False),
+        patch.object(pm_connectors, "get_access_token", _oauth),
+    ):
+        headers, source = await pm_connectors._auth_headers("atlassian")
+    assert source == "oauth" and headers == {"Authorization": "Bearer oauth-token"}
+
+
+@pytest.mark.asyncio
+async def test_token_auth_can_be_opted_into():
+    async def _oauth(_name):
+        return "oauth-token"
+
+    env = {**TOKEN_ENV, "LOUPFEED_MCP_PREFER_TOKEN": "1"}
+    with (
+        patch.dict("os.environ", env, clear=False),
         patch.object(pm_connectors, "get_access_token", _oauth),
     ):
         headers, source = await pm_connectors._auth_headers("atlassian")
@@ -64,17 +80,18 @@ async def test_oauth_still_used_when_no_token_is_configured():
 
 
 @pytest.mark.asyncio
-async def test_the_escape_hatch_restores_oauth_precedence():
-    async def _oauth(_name):
-        return "oauth-token"
+async def test_token_is_still_used_when_there_is_no_oauth_grant():
+    """Headless deployments with only a token must still connect."""
 
-    env = {**TOKEN_ENV, "LOUPFEED_MCP_PREFER_OAUTH": "1"}
+    async def _no_oauth(_name):
+        return ""
+
     with (
-        patch.dict("os.environ", env, clear=False),
-        patch.object(pm_connectors, "get_access_token", _oauth),
+        patch.dict("os.environ", TOKEN_ENV, clear=False),
+        patch.object(pm_connectors, "get_access_token", _no_oauth),
     ):
         _, source = await pm_connectors._auth_headers("atlassian")
-    assert source == "oauth"
+    assert source == "token"
 
 
 @pytest.mark.asyncio
