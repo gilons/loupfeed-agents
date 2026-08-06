@@ -18,7 +18,7 @@ from typing import Any
 
 import requests
 
-from ..surfaces import loupfeed_targets, surface_for_key
+from ..surfaces import is_source_path, loupfeed_targets, surface_for_key
 
 logger = logging.getLogger(__name__)
 
@@ -136,24 +136,37 @@ def _route(event: dict[str, Any]) -> str | None:
     return None
 
 
-def _frames(event: dict[str, Any]) -> list[str]:
+def _frames(event: dict[str, Any]) -> tuple[list[str], str]:
+    """The stack as strings, plus whether those locations are source paths.
+
+    A web crash's frames are the URLs of minified bundles, not source files, so
+    they cannot be blamed. Saying which kind they are stops the caller treating
+    ``https://app.example.com/assets/main-abc.js:2`` as a repository path (seen
+    live on production data, 2026-08-06).
+    """
     exception = event.get("exception")
     stack = (exception or {}).get("stacktrace") if isinstance(exception, dict) else None
     frames = stack.get("frames") if isinstance(stack, dict) else None
     if not isinstance(frames, list):
-        return []
+        return [], "none"
     # in_app frames first: a stack's top frame is usually framework code, and
     # the first line that belongs to the product is where triage starts.
     ordered = sorted(
         (f for f in frames if isinstance(f, dict)),
         key=lambda f: (not f.get("in_app"),),
     )
-    out = []
+    out, source_like = [], []
     for frame in ordered[:_MAX_FRAMES]:
-        where = f"{frame.get('filename') or '?'}:{frame.get('lineno') or '?'}"
+        filename = str(frame.get("filename") or "?")
+        where = f"{filename}:{frame.get('lineno') or '?'}"
         function = frame.get("function")
         out.append(f"{where} ({function})" if function else where)
-    return out
+        source_like.append(is_source_path(filename))
+    if not out:
+        return [], "none"
+    if all(source_like):
+        return out, "source"
+    return out, ("mixed" if any(source_like) else "minified")
 
 
 def loupfeed_find_reports(
@@ -263,10 +276,22 @@ def loupfeed_find_reports(
 def loupfeed_report(surface: str, kind: str, report_id: str) -> dict[str, Any]:
     """Read one report in full, with the release and the resolved source line.
 
-    This is the anchor. ``release`` names the exact build the reporter ran
-    (``<surface>@<commit>``), and ``resolved_source`` is the ``src:line`` the
-    failing element compiles from **in that build** — so blame those lines at
-    that commit, never at the head of the default branch.
+    ``release`` names the exact build the reporter ran (``<surface>@<commit>``).
+
+    How strong the code anchor is depends on the kind, and confusing the two
+    produces a confident wrong answer:
+
+    - **feedback**: ``resolved_source`` is the ``src:line`` the reported element
+      compiles from **in that build**, resolved through the release's manifest.
+      This is the strong anchor. Blame those lines at that commit.
+    - **crash**: there is no manifest resolution for a stack. Check
+      ``frames_kind`` first. ``source`` means the frames are real source paths
+      and can be blamed. ``minified`` means they are URLs of built bundles
+      (``https://app.example.com/assets/main-BLd9wxkg.js:2``), which name no
+      file in any repository: do NOT try to blame them and do not turn them into
+      repository paths. Pin such a crash from the release window
+      (``first_seen_release``), the exception message, the route, and code
+      search for the throwing construct instead.
 
     For a crash, ``first_seen_release`` is the oldest release the group appears
     in, which brackets the change that introduced it.
@@ -323,6 +348,7 @@ def loupfeed_report(surface: str, kind: str, report_id: str) -> dict[str, Any]:
         if not events:
             return {"ok": False, "error": "that crash group has no occurrences"}
         newest, oldest = events[0], events[-1]
+        frames, frames_kind = _frames(newest)
         exception = newest.get("exception") if isinstance(newest.get("exception"), dict) else {}
         releases = sorted({str(e.get("release")) for e in events if e.get("release")})
         return {
@@ -336,7 +362,8 @@ def loupfeed_report(surface: str, kind: str, report_id: str) -> dict[str, Any]:
                 "value": str(exception.get("value") or "")[:1000],
                 "handled": (exception.get("mechanism") or {}).get("handled"),
             },
-            "frames": _frames(newest),
+            "frames": frames,
+            "frames_kind": frames_kind,
             "route": _route(newest),
             "release": newest.get("release"),
             "first_seen_release": oldest.get("release"),

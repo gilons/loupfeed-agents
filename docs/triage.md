@@ -15,12 +15,35 @@ identity), and the build uploads an id-to-source manifest keyed by that release.
 So an instrumented report already names the tree the reporter was running:
 
 1. `release` gives the sha of the build.
-2. The manifest resolves the failing element or stack frame to `path:line` **in
-   that tree**.
+2. The manifest resolves the reported **element** to `path:line` **in that
+   tree**.
 3. `git_blame_line` at that sha names the commit responsible for that line.
 4. `git_compare` between the last good release and the first bad one is the set
    the culprit must be in. Intersected with the blamed file, that is usually a
    handful of commits.
+
+Verified end to end against live production data: eight consecutive feedback
+reports each resolved to a real source line, and blaming one at its release
+commit named the commit that introduced it.
+
+### A crash stack is not a source location
+
+Only element ids go through the manifest. A web crash's stack frames are the
+URLs of built bundles (`https://app.example.com/assets/main-BLd9wxkg.js:2`),
+which name no file in any repository, and every open crash group on the
+DeliverU production instance is of that shape. So:
+
+- `loupfeed_report` labels the stack with `frames_kind`: `source` (blameable),
+  `minified` (not), or `mixed`.
+- `surfaces.repo_path` returns None for anything that is not a source path.
+  Before that guard existed it produced
+  `apps/webapp/https://app.deliveru.io/assets/loupfeed-BLd9wxkg.js`, a path that
+  would then be blamed or searched for as if it were real.
+- A minified crash is still pinnable in the ways that matter: the release is an
+  exact sha, `first_seen_release` brackets the regression, and the exception
+  message plus route plus code search locate the throwing construct. The report
+  has to say the stack was minified, so nobody assumes the file was identified
+  and discarded.
 
 The trap the tools are shaped around: those line numbers are only valid at that
 commit. Blaming them at the head of the default branch names a real commit,

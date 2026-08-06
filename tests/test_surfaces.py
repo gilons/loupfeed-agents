@@ -94,6 +94,38 @@ def test_manifest_paths_are_joined_onto_the_build_root(registry_file):
     assert surfaces.repo_path(admin, "src/main.ts") == "src/main.ts"
 
 
+def test_a_bundle_url_is_never_turned_into_a_repository_path(registry_file):
+    """Web crash frames are URLs of built bundles, seen live on production data.
+
+    Prefixing one with the build root invented
+    ``apps/webapp/https://app.deliveru.io/assets/loupfeed-BLd9wxkg.js``, which
+    would then be blamed, searched for, or reported as the defect's location.
+    """
+    surface = surfaces.surface_for_key("acme-webapp", registry_file)
+    assert surfaces.repo_path(surface, "https://app.acme.dev/assets/main-BLd9wxkg.js") is None
+    assert surfaces.repo_path(surface, "//cdn.acme.dev/x.js") is None
+    # An absolute path is somebody's build machine, not the repository either.
+    assert surfaces.repo_path(surface, "/Users/ada/acme/app/x.tsx") is None
+    # Real manifest paths still resolve, including a "./" prefix.
+    assert surfaces.repo_path(surface, "./app/x.tsx") == "apps/webapp/app/x.tsx"
+
+
+@pytest.mark.parametrize(
+    ("src", "expected"),
+    [
+        ("app/routes/x.tsx", True),
+        ("./app/x.tsx", True),
+        ("https://app.acme.dev/assets/main.js", False),
+        ("http://localhost:3000/x.js", False),
+        ("//cdn.acme.dev/x.js", False),
+        ("/abs/path/x.tsx", False),
+        ("", False),
+    ],
+)
+def test_source_path_detection(src, expected):
+    assert surfaces.is_source_path(src) is expected
+
+
 def test_instance_token_comes_from_the_named_env_var(registry_file, monkeypatch):
     monkeypatch.setenv("ACME_TOKEN", "t0ken")
     surface = surfaces.surface_for_key("acme-webapp", registry_file)

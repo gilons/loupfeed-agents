@@ -131,6 +131,40 @@ def test_crash_report_brackets_the_first_bad_release(monkeypatch):
     # The product's own frame leads: the top frame is usually framework noise.
     assert out["frames"][0] == "app/routes/export.tsx:42 (buildRows)"
     assert out["exception"]["type"] == "TypeError"
+    # vendor.js is a source-looking relative path, so this stack is blameable.
+    assert out["frames_kind"] == "source"
+
+
+def test_a_minified_stack_is_labelled_so_its_frames_are_not_blamed(monkeypatch):
+    """Production web crashes carry bundle URLs, not source paths (seen live)."""
+    body = {
+        "groupId": "cg_2",
+        "events": [
+            {
+                "receivedAt": "2026-08-06T18:33:26Z",
+                "release": "acme-webapp@8792aa2",
+                "exception": {
+                    "type": "Error",
+                    "value": "Script error.",
+                    "stacktrace": {
+                        "frames": [
+                            {
+                                "filename": "https://app.acme.dev/assets/main-BLd9wxkg.js",
+                                "lineno": 2,
+                                "function": "o",
+                                "in_app": True,
+                            }
+                        ]
+                    },
+                },
+            }
+        ],
+    }
+    monkeypatch.setattr(lr.requests, "get", lambda url, **kw: _Resp(200, body))
+    out = lr.loupfeed_report("acme-webapp", "crash", "cg_2")
+    assert out["frames_kind"] == "minified"
+    # The raw frame is still reported: it is evidence, just not a source path.
+    assert "main-BLd9wxkg.js:2" in out["frames"][0]
 
 
 def test_find_reports_filters_by_wording(monkeypatch):

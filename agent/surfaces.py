@@ -161,9 +161,31 @@ def repo_owner_name(surface: dict[str, Any]) -> tuple[str, str]:
     return owner, name
 
 
-def repo_path(surface: dict[str, Any], src: str) -> str:
-    """Turn a manifest/stack path into a repository path via ``path_root``."""
-    clean = (src or "").strip().lstrip("./").lstrip("/")
+def is_source_path(src: str) -> bool:
+    """Whether this location is a source path at all, rather than a served URL.
+
+    Manifest entries are repository-relative source paths, but a web crash's
+    stack frames are runtime URLs of minified bundles
+    (``https://app.example.com/assets/main-BLd9wxkg.js:2``). Those name no file
+    in any repository, so they must never be turned into one.
+    """
+    candidate = (src or "").strip()
+    if not candidate or "://" in candidate or candidate.startswith("//"):
+        return False
+    # An absolute filesystem path is somebody's build machine, not the repo.
+    return not candidate.startswith("/")
+
+
+def repo_path(surface: dict[str, Any], src: str) -> str | None:
+    """Turn a manifest source path into a repository path via ``path_root``.
+
+    Returns None when ``src`` is not a source path (a bundle URL, an absolute
+    path). Prefixing those with the build root invents a file that does not
+    exist, which then gets blamed, searched for, or reported as a location.
+    """
+    if not is_source_path(src):
+        return None
+    clean = src.strip().removeprefix("./").lstrip("/")
     root = str(surface.get("path_root") or "").strip("/")
     if not root or clean.startswith(f"{root}/"):
         return clean

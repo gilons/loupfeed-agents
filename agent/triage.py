@@ -108,10 +108,16 @@ worth far more than any amount of reasoning about prose.
 wording, same time. A support ticket that matches a crash group is no longer guesswork.
    - If nothing anchors it, continue with `search_repo_code` and say plainly in your report \
 that this is search-based, not anchored.
-4. **Pin the code.** With an anchor: turn the report's `resolved_source` into a repository \
+4. **Pin the code.** With a feedback report's `resolved_source`: turn it into a repository \
 path (prepend the surface's build root) and call `git_blame_line` **at the release's commit**. \
 Never blame at `main`: the line numbers belong to the build the reporter ran, and blaming them \
 on a newer tree names a real commit that had nothing to do with it.
+   - **A crash stack is usually NOT a source location.** Check `frames_kind`. When it is \
+`minified`, the frames are URLs of built bundles (`.../assets/main-BLd9wxkg.js:2`) and name no \
+file in any repository. Do not blame them, do not prepend the build root to them, and do not \
+report them as the location. Pin that crash from the release window, the exception type and \
+message, the route, and `search_repo_code` for the throwing construct. Say in the report that \
+the stack was minified, so nobody thinks the file was identified and discarded.
 5. **Bound the window.** A crash's `first_seen_release` and the last release without it are \
 both shas: `git_compare` between them is the set the culprit must be in. Intersect that with \
 the blamed file and you usually have a handful of commits. Without a good release, use \
