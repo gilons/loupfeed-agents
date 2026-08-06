@@ -36,9 +36,25 @@ _FAILURE_TTL_SECONDS = 60
 _cache: tuple[float, float, list[BaseTool]] | None = None  # (at, ttl, tools)
 
 
-def _fallback_headers(name: str) -> dict[str, str] | None:
-    """Service-account fallback (env) — the platform policy is MCP OAuth 2.1
-    via the token store; these envs exist for headless/CI deployments only."""
+# Cloudflare fronts the Atlassian MCP endpoint and rejects requests whose
+# User-Agent looks like a bare HTTP library (error 1010, a 403 that names no
+# cause). Every MCP request must carry a real one.
+USER_AGENT = os.environ.get("LOUPFEED_USER_AGENT", "loupfeed-agents/1.0 (+https://loupfeed.dev)")
+
+
+def prefer_token_auth() -> bool:
+    """Whether a configured API token outranks a stored OAuth grant.
+
+    Token auth is the supported machine-to-machine path for the Atlassian MCP
+    server and needs no interactive consent, no dynamic client registration
+    and no per-org callback-domain allowlist, so it is preferred by default.
+    Set LOUPFEED_MCP_PREFER_OAUTH=1 to go back to the OAuth grant.
+    """
+    return os.environ.get("LOUPFEED_MCP_PREFER_OAUTH", "").strip() not in ("1", "true", "yes")
+
+
+def token_headers(name: str) -> dict[str, str] | None:
+    """API-token auth for a connector, when one is configured."""
     if name != "atlassian":
         return None
     bearer = os.environ.get("ATLASSIAN_MCP_BEARER", "")
@@ -52,18 +68,27 @@ def _fallback_headers(name: str) -> dict[str, str] | None:
     return None
 
 
+async def _auth_headers(name: str) -> tuple[dict[str, str] | None, str]:
+    """Headers for a connector plus which credential they came from."""
+    token = token_headers(name)
+    if token is not None and prefer_token_auth():
+        return token, "token"
+    oauth_token = await get_access_token(name)
+    if oauth_token:
+        return {"Authorization": f"Bearer {oauth_token}"}, "oauth"
+    return (token, "token") if token is not None else (None, "none")
+
+
 async def _connections() -> dict[str, dict]:
     connections: dict[str, dict] = {}
     for name, url in connector_registry().items():
-        oauth_token = await get_access_token(name)
-        headers = (
-            {"Authorization": f"Bearer {oauth_token}"} if oauth_token else _fallback_headers(name)
-        )
+        headers, source = await _auth_headers(name)
         if headers is not None:
+            logger.info("connector %s: authenticating with %s auth", name, source)
             connections[name] = {
                 "transport": "streamable_http",
                 "url": url,
-                "headers": headers,
+                "headers": {**headers, "User-Agent": USER_AGENT},
             }
     return connections
 
