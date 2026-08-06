@@ -26,6 +26,7 @@ import requests
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 from langgraph_sdk import get_client
 
+from .surfaces import surface_for_issue
 from .utils.atlassian_api import atlassian_request, use_app_for
 from .utils.redact_internals import redact_internals
 
@@ -92,6 +93,7 @@ def normalise(event: dict[str, Any]) -> dict[str, Any]:
         "event_type": event_type,
         "product": "jira" if event_type.startswith("avi:jira") else "confluence",
         "issue_key": str(issue.get("key") or "") or None,
+        "issue_type": str((fields.get("issuetype") or {}).get("name") or "") or None,
         "page_id": str(content.get("id") or "") or None,
         "title": str(fields.get("summary") or content.get("title") or "") or None,
         "requester_account_id": str(event.get("atlassianId") or "") or None,
@@ -188,6 +190,7 @@ def is_addressed_to_us(normalised: dict[str, Any], app_account_id: str) -> bool:
 
 CODING_GRAPH = "agent"
 PM_GRAPH = "pm"
+TRIAGE_GRAPH = "triage"
 
 # One surface item maps to one agent thread, the same rule every entry point
 # follows, so follow-up comments continue the same conversation.
@@ -205,15 +208,24 @@ def langgraph_thread_id(normalised: dict[str, Any]) -> str:
 
 
 def route(normalised: dict[str, Any]) -> str:
-    """Assignment means do the work; a mention means answer or draft.
+    """Assignment means do the work; a mention means answer, triage, or draft.
 
     Assigning an issue to the app is the "bug to PR" contract, so it goes to
-    the coding agent. Everything else that names us is a question or a
-    drafting request and belongs to the pm agent, which can read the
-    planning system and the repository read-only.
+    the coding agent. A mention on an issue whose Jira project the surface
+    registry maps to a repository is a bug report, and goes to triage: that
+    mapping is the deployment saying "this project holds defects in this app".
+    Everything else that names us is a question or a drafting request and
+    belongs to the pm agent.
+
+    Routing on the project rather than on the wording is deliberate. Sniffing a
+    comment for triage-like intent makes the entry point unpredictable, and a
+    person who wants something else from a bug still gets a useful answer from
+    triage, which reads the ticket either way.
     """
     if "assignee" in (normalised.get("changed_fields") or []):
         return CODING_GRAPH
+    if normalised.get("issue_key") and surface_for_issue(normalised["issue_key"]):
+        return TRIAGE_GRAPH
     return PM_GRAPH
 
 
@@ -240,6 +252,18 @@ def build_prompt(normalised: dict[str, Any], graph: str) -> str:
             "the platform posts it as a comment on the issue for you, so write it for the "
             "reporter, not for a log, and do NOT comment on the issue yourself. "
             "Never claim a check or test passed unless you read its actual result.\n"
+            + (f"\nThe request said: {asked}\n" if asked else "")
+        )
+    if graph == TRIAGE_GRAPH:
+        return (
+            f"Triage {where}"
+            + (f' ("{title}")' if title else "")
+            + ".\n\nRead the ticket and its comments with your Atlassian tools first, then work "
+            "through your procedure: prior triage, anchor, pin, window, diffs. Your final "
+            "message is posted as a comment on the issue for you, so write the report for the "
+            "developer who picks this up and do NOT comment on the issue yourself.\n\n"
+            "Name no suspect commit whose diff you have not read, and blame no line at any ref "
+            "other than the release it was reported from.\n"
             + (f"\nThe request said: {asked}\n" if asked else "")
         )
     return (
@@ -364,6 +388,10 @@ async def dispatch(normalised: dict[str, Any]) -> None:
         "atlassian_surface": surface_key(normalised),
         "requester_atlassian_account_id": normalised.get("requester_account_id"),
     }
+    if graph == TRIAGE_GRAPH:
+        surface = surface_for_issue(normalised.get("issue_key"))
+        if surface:
+            configurable["triage_surface"] = surface["key"]
     try:
         result = await client.runs.wait(
             thread_id,

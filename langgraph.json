@@ -9,7 +9,8 @@
     "chat": "agent.chat:traced_chat_agent",
     "scheduler": "agent.scheduler:get_scheduler",
     "ci_monitor": "agent.ci_monitor:get_ci_monitor",
-    "pm": "agent.pm:traced_pm_agent"
+    "pm": "agent.pm:traced_pm_agent",
+    "triage": "agent.triage:traced_triage_agent"
   },
   "dependencies": [
     "."

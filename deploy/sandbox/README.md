@@ -54,6 +54,8 @@ repo** with:
 | `env/render-config` | sourced by the env renderer | `SECRET_ID=...`, `REGION=...`, `REPO_DIR=...` overrides |
 | `prompt/pm-prompt.md` | appended to the pm graph's system prompt (`PM_PROMPT_EXTRA_FILE`, default `/etc/loupfeed/pm-prompt.md`) | your planning-workspace conventions (site URLs, idea→planning→dev workflow, labels) |
 | `prompt/working-env.md` | appended to the coding agent's working-environment prompt section (`WORKING_ENV_EXTRA_FILE`, default `/etc/loupfeed/working-env.md`) | your cloud-access conventions, repo workflow pointers, runtime notes. Must not contain bare `{` / `}`. |
+| `prompt/triage-prompt.md` | appended to the triage graph's system prompt (`TRIAGE_PROMPT_EXTRA_FILE`, default `/etc/loupfeed/triage-prompt.md`) | your repository layout, where each kind of defect tends to live, ownership notes |
+| `surfaces.json` | the triage graph's surface registry (`LOUPFEED_SURFACES_FILE`, default `/etc/loupfeed/surfaces.json`) | one entry per built app: release-string key, repo, build root, Jira projects, loupfeed instances. See [`docs/triage.md`](../../docs/triage.md) and [`docs/surfaces.example.json`](../../docs/surfaces.example.json) |
 
 ## Fresh box
 
