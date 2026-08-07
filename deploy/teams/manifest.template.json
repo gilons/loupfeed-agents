@@ -37,7 +37,7 @@
   ],
   "configurableTabs": [
     {
-      "configurationUrl": "https://d3mlm0z8iw9b1o.cloudfront.net/teams/tab/config",
+      "configurationUrl": "${LOUPFEED_PUBLIC_BASE_URL}/teams/tab/config",
       "canUpdateConfiguration": false,
       "scopes": [
         "team",
@@ -52,7 +52,7 @@
     }
   ],
   "validDomains": [
-    "d3mlm0z8iw9b1o.cloudfront.net"
+    "${LOUPFEED_PUBLIC_HOST}"
   ],
   "webApplicationInfo": {
     "id": "${TEAMS_APP_ID}",

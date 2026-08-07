@@ -69,3 +69,5 @@ __pycache__/
 .eggs/
 
 # 
+# Rendered Teams app package (per-deployment)
+deploy/teams/build/

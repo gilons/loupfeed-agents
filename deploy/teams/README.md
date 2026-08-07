@@ -16,13 +16,28 @@ The Teams adapter is served by the platform at `POST /webhooks/teams`
    management). Either way, set the **messaging endpoint** to
    `https://<your-domain>/webhooks/teams` and enable the **Microsoft Teams
    channel**.
-3. **Teams app package**: fill `manifest.template.json` (replace
-   `${TEAMS_APP_ID}`, adjust `validDomains` to your public domain), add
-   `color.png` (192×192) and `outline.png` (32×32), zip the three files, and
-   upload via Teams → Apps → Manage your apps → Upload an app (or the org app
+3. **Teams app package**: render it, do not hand-edit it. The template carries
+   no organisation's values, and every one of them comes from two variables:
+
+   ```bash
+   TEAMS_APP_ID=<your Entra app id> \
+   LOUPFEED_PUBLIC_BASE_URL=https://agents.example.dev \
+     ./render-manifest
+   ```
+
+   That writes `build/loupfeed-teams.zip` (manifest plus both icons) and refuses
+   to produce a package with any placeholder left unsubstituted, which is the
+   failure that otherwise ships silently and grants nothing. `validDomains` gets
+   the bare host, since a scheme there is rejected.
+
+   Upload via Teams → Apps → Manage your apps → Upload an app (or the org app
    catalog). **Re-uploads are rejected unless the manifest `version` is
-   bumped.** Always add/update the app from **Teams on the web** — the desktop
-   client serves a cached package and grants nothing.
+   bumped** — edit it in `manifest.template.json`. Always add/update the app
+   from **Teams on the web**: the desktop client serves a cached package and
+   grants nothing.
+
+   Replace `color.png` (192×192) and `outline.png` (32×32) with your own icons
+   if you are publishing under your own brand.
 
 ### Private and shared channels
 

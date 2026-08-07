@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Render the Teams app package for THIS deployment, ready to upload.
+#
+# The template carries no organisation's values: everything specific comes from
+# two variables, so a new publisher renders their own package rather than
+# editing JSON by hand and missing a field.
+#
+#   TEAMS_APP_ID               required, the Entra app (bot) id
+#   LOUPFEED_PUBLIC_BASE_URL   required, https origin of your deployment,
+#                              e.g. https://agents.acme.dev
+#
+# Produces build/manifest.json and build/loupfeed-teams.zip (manifest + icons),
+# which is what Teams admin center / "Upload a custom app" expects.
+#
+# Usage:
+#   TEAMS_APP_ID=... LOUPFEED_PUBLIC_BASE_URL=https://agents.acme.dev ./render-manifest
+set -euo pipefail
+
+cd "$(dirname "$0")"
+OUT=build
+
+: "${TEAMS_APP_ID:?set TEAMS_APP_ID to your Entra app (bot) id}"
+: "${LOUPFEED_PUBLIC_BASE_URL:?set LOUPFEED_PUBLIC_BASE_URL, e.g. https://agents.acme.dev}"
+
+case "$LOUPFEED_PUBLIC_BASE_URL" in
+  https://*) ;;
+  *) echo "error: LOUPFEED_PUBLIC_BASE_URL must start with https:// (Teams requires it)" >&2
+     exit 2 ;;
+esac
+BASE="${LOUPFEED_PUBLIC_BASE_URL%/}"
+# validDomains is a host list, not a URL list: a scheme there is rejected.
+HOST="${BASE#https://}"
+HOST="${HOST%%/*}"
+
+mkdir -p "$OUT"
+sed -e "s|\${TEAMS_APP_ID}|$TEAMS_APP_ID|g" \
+    -e "s|\${LOUPFEED_PUBLIC_BASE_URL}|$BASE|g" \
+    -e "s|\${LOUPFEED_PUBLIC_HOST}|$HOST|g" \
+    manifest.template.json > "$OUT/manifest.json"
+
+# A leftover placeholder means a field the publisher would have shipped broken.
+if grep -q '\${' "$OUT/manifest.json"; then
+  echo "error: unsubstituted placeholders remain:" >&2
+  grep -n '\${' "$OUT/manifest.json" >&2
+  exit 3
+fi
+python3 -c "import json,sys; json.load(open('$OUT/manifest.json'))" ||
+  { echo "error: rendered manifest is not valid JSON" >&2; exit 4; }
+
+cp color.png outline.png "$OUT/"
+( cd "$OUT" && rm -f loupfeed-teams.zip && zip -q loupfeed-teams.zip manifest.json color.png outline.png )
+
+echo "rendered $OUT/loupfeed-teams.zip"
+echo "  app id: $TEAMS_APP_ID"
+echo "  base:   $BASE"
+echo "  host:   $HOST"
