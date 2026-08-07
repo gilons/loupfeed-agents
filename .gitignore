@@ -71,3 +71,8 @@ __pycache__/
 # 
 # Rendered Teams app package (per-deployment)
 deploy/teams/build/
+
+# Atlassian entry app: manifest.yml is generated per deployment (see
+# deploy/atlassian/bin/render-manifest), and it carries a forge app id.
+deploy/atlassian/manifest.yml
+deploy/atlassian/node_modules/

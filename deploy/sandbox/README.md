@@ -77,3 +77,16 @@ monorepos) and installs Playwright chromium system libs via dnf.
   re-runs on the same issue — reset with `DELETE http://localhost:2024/threads/{id}`.
 - GitHub `GET /user` 403 in logs is benign (bot tokens can't read a user
   profile; falls through to the team default).
+
+## Entry surfaces
+
+The two apps people reach the agents through ship alongside this deployment
+guide, and both are rendered per deployment rather than hand-edited:
+
+| Surface | Where | Render |
+|---|---|---|
+| Atlassian (Jira + Confluence) | [`deploy/atlassian`](../atlassian) | `bin/render-manifest` then `forge deploy` |
+| Microsoft Teams | [`deploy/teams`](../teams) | `./render-manifest` then upload the zip |
+
+Neither contains anything specific to one organisation: a publisher supplies
+their deployment URL (and for Teams, their bot id) and gets their own app.
