@@ -17,6 +17,7 @@ from .graph_api import (
 )
 from .graph_create_meeting import graph_create_meeting
 from .http_request import http_request
+from .jira_provenance import jira_report_provenance
 from .linear_comment import linear_comment
 from .linear_create_issue import linear_create_issue
 from .linear_delete_issue import linear_delete_issue
@@ -49,6 +50,7 @@ __all__ = [
     "git_commits_touching",
     "git_compare",
     "github_api",
+    "jira_report_provenance",
     "confluence_attach_image",
     "confluence_file_capture",
     "graph_create_meeting",

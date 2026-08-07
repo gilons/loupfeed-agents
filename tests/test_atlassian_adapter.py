@@ -507,7 +507,39 @@ def test_reply_prefers_the_app_so_the_app_authors_the_comment():
     url, headers, body = calls[0]
     assert url == "https://app.example/x1/tok"
     assert headers.get("X-Loupfeed-Secret") == "s3cret"
-    assert body == {"text": "Done.", "issueKey": "SPB-3"}
+    assert body["issueKey"] == "SPB-3"
+    assert body["text"] == "Done."
+    # Rendering happens here, not in the app: sending only `text` is what made
+    # replies arrive as one paragraph with markdown showing literally.
+    assert body["bodyAdf"]["type"] == "doc"
+
+
+def test_a_markdown_reply_reaches_jira_as_formatted_adf():
+    from agent.atlassian_adapter import post_reply
+
+    captured: dict = {}
+
+    class _R:
+        status_code = 201
+
+    def _post(url, **kw):
+        captured.update(kw.get("json") or {})
+        return _R()
+
+    env = {
+        "ATLASSIAN_APP_REPLY_URL": "https://app.example/x1/tok",
+        "ATLASSIAN_APP_SHARED_SECRET": "s3cret",
+    }
+    with (
+        patch.dict("os.environ", env, clear=False),
+        patch("agent.atlassian_adapter.requests.post", side_effect=_post),
+    ):
+        assert post_reply(normalise(COMMENT_EVENT), "**Verdict** — see `x.tsx`\n\n- one\n- two")
+
+    blocks = captured["bodyAdf"]["content"]
+    assert [b["type"] for b in blocks] == ["paragraph", "bulletList"]
+    assert blocks[0]["content"][0]["marks"] == [{"type": "strong"}]
+    assert len(blocks[1]["content"]) == 2
 
 
 def test_reply_falls_back_to_the_deployment_credential():
