@@ -28,6 +28,7 @@ from langgraph_sdk import get_client
 
 from .surfaces import surface_for_issue
 from .utils.atlassian_api import atlassian_request, use_app_for
+from .utils.markdown_reply import markdown_to_adf, markdown_to_storage
 from .utils.redact_internals import redact_internals
 
 logger = logging.getLogger(__name__)
@@ -306,11 +307,16 @@ def _reply_via_app(normalised: dict[str, Any], text: str) -> bool:
     secret = shared_secret()
     if not url or not secret:
         return False
+    # Render here rather than in the app: the app forwards what it is given, and
+    # a flat `text` reply is what made reports arrive as one paragraph with
+    # `**bold**` showing literally.
     payload: dict[str, Any] = {"text": text}
     if normalised.get("issue_key"):
         payload["issueKey"] = normalised["issue_key"]
+        payload["bodyAdf"] = markdown_to_adf(text)
     else:
         payload["pageId"] = normalised.get("page_id")
+        payload["bodyStorage"] = markdown_to_storage(text)
     try:
         r = requests.post(
             url,
@@ -346,15 +352,7 @@ def post_reply(normalised: dict[str, Any], text: str) -> bool:
             r = requests.post(
                 f"{_site_base()}/rest/api/3/issue/{normalised['issue_key']}/comment",
                 auth=auth,
-                json={
-                    "body": {
-                        "type": "doc",
-                        "version": 1,
-                        "content": [
-                            {"type": "paragraph", "content": [{"type": "text", "text": clean}]}
-                        ],
-                    }
-                },
+                json={"body": markdown_to_adf(clean)},
                 timeout=_TIMEOUT,
             )
         else:
@@ -363,7 +361,10 @@ def post_reply(normalised: dict[str, Any], text: str) -> bool:
                 auth=auth,
                 json={
                     "pageId": normalised.get("page_id"),
-                    "body": {"representation": "storage", "value": f"<p>{clean}</p>"},
+                    "body": {
+                        "representation": "storage",
+                        "value": markdown_to_storage(clean),
+                    },
                 },
                 timeout=_TIMEOUT,
             )

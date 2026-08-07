@@ -155,6 +155,20 @@ def surface_for_issue(issue_key: str | None, path: str | None = None) -> dict[st
     return surface_for_jira_project(jira_project_of(issue_key), path)
 
 
+def support_projects(surface: dict[str, Any] | None) -> list[str]:
+    """Projects whose tickets mean "a customer reported this".
+
+    A link into one of these is the only evidence in Jira that a report came
+    from a customer rather than from a colleague relaying it.
+    """
+    if not surface:
+        return []
+    configured = surface.get("support_projects")
+    if not isinstance(configured, list):
+        return []
+    return [str(p).strip().upper() for p in configured if str(p).strip()]
+
+
 def repo_owner_name(surface: dict[str, Any]) -> tuple[str, str]:
     """``{"repo": "owner/name"}`` -> ``("owner", "name")``."""
     owner, _, name = str(surface.get("repo") or "").partition("/")

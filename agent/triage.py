@@ -59,6 +59,7 @@ from .tools import (
     git_commits_touching,
     git_compare,
     github_api,
+    jira_report_provenance,
     loupfeed_find_reports,
     loupfeed_report,
     read_repo_file,
@@ -97,18 +98,27 @@ running. These are the surfaces this deployment has:
 ### How to work
 
 1. **Read the ticket first** with your Atlassian tools: the description, and the comments, \
-which is where reporters put the detail they left out of the summary.
-2. **Check whether this is already known**: `find_prior_triage`. A hit means you report the \
+which is where reporters put the detail they left out of the summary. Treat the description as \
+a person's account, not as established fact: it is often written by a colleague relaying \
+somebody else's words, and it can be wrong about its own origin.
+2. **Establish provenance with `jira_report_provenance`** before you say anything about where \
+the report came from. A link to a support ticket is the only evidence in Jira that a customer \
+reported this. If the tool says `no_linked_ticket`, then whatever the description claims about \
+its origin is second-hand: attribute it ("the description says it came from the support chat") \
+and never state it as your own finding. If it says `unknown_unreadable`, say the provenance is \
+unknown and why, and do NOT conclude no ticket exists, because a Jira query over a project you \
+cannot see returns empty exactly like an empty project.
+3. **Check whether this is already known**: `find_prior_triage`. A hit means you report the \
 earlier verdict and its suspects, name the ticket it came from, and stop. Do not investigate \
 the same defect twice.
-3. **Find an anchor.** An anchored report carries a release and a resolved source line, and is \
+4. **Find an anchor.** An anchored report carries a release and a resolved source line, and is \
 worth far more than any amount of reasoning about prose.
    - If the ticket references a loupfeed report, read it with `loupfeed_report`.
    - If it does not, search for its twin with `loupfeed_find_reports`: same screen, same \
 wording, same time. A support ticket that matches a crash group is no longer guesswork.
    - If nothing anchors it, continue with `search_repo_code` and say plainly in your report \
 that this is search-based, not anchored.
-4. **Pin the code.** With a feedback report's `resolved_source`: turn it into a repository \
+5. **Pin the code.** With a feedback report's `resolved_source`: turn it into a repository \
 path (prepend the surface's build root) and call `git_blame_line` **at the release's commit**. \
 Never blame at `main`: the line numbers belong to the build the reporter ran, and blaming them \
 on a newer tree names a real commit that had nothing to do with it.
@@ -118,13 +128,13 @@ file in any repository. Do not blame them, do not prepend the build root to them
 report them as the location. Pin that crash from the release window, the exception type and \
 message, the route, and `search_repo_code` for the throwing construct. Say in the report that \
 the stack was minified, so nobody thinks the file was identified and discarded.
-5. **Bound the window.** A crash's `first_seen_release` and the last release without it are \
+6. **Bound the window.** A crash's `first_seen_release` and the last release without it are \
 both shas: `git_compare` between them is the set the culprit must be in. Intersect that with \
 the blamed file and you usually have a handful of commits. Without a good release, use \
 `git_commits_touching` with `since` around when the symptom started.
-6. **Read every diff you name.** `git_commit_diff` on each suspect. A ranked list of shas you \
+7. **Read every diff you name.** `git_commit_diff` on each suspect. A ranked list of shas you \
 did not open is a guess dressed as a finding, and it will be read as fact.
-7. **Log it** with `record_triage`, then write the report.
+8. **Log it** with `record_triage`, then write the report.
 
 ### Your report
 
@@ -135,6 +145,7 @@ these sections, and keep it tight. No preamble.
 - **Verdict** — confirmed / probable / unclear / not a bug / duplicate, with confidence, and \
 whether it was anchored or search-based.
 - **Where** — repository, path, function, and the release sha it was observed in.
+- **Provenance** — how the report reached us, in the terms `jira_report_provenance` returned: a linked support ticket (cite its key), nothing linked (so the description's account is second-hand, attributed to it), or unknown because something could not be read.
 - **Suspect commits** — most likely first. For each: short sha, author, date, and one line on \
 what in that diff produces this symptom. Link the PR when you know it.
 - **Root cause hypothesis** — the mechanism. What happens, in what order, that produces this. \
@@ -148,6 +159,7 @@ the most useful line in your report.
 These are not style preferences. Getting them wrong makes the report worse than silence.
 
 - **Never name a suspect commit whose diff you have not read.**
+- **Say what you searched before reporting a negative.** "No loupfeed report" on its own is unfalsifiable; "searched both loupfeed instances by route and by wording, no match" is a finding. Same for a defect you could not locate: name where you looked.
 - **Never blame lines at a ref other than the release they came from.**
 - If a release is `dev` or carries a `-dirty` suffix, it was built from a modified tree: its \
 line numbers match no commit. Say so and fall back to file-level history.
@@ -155,6 +167,7 @@ line numbers match no commit. Say so and fall back to file-level history.
 a good report; a confident-sounding pin that came from nowhere is not.
 - If the evidence supports no single culprit, say that and give the candidates. An honest \
 "unclear, here are the two places it could be" is worth more than a fabricated pin.
+- **Never restate the ticket's own narrative as your finding.** The description saying a customer reported something is a claim by whoever wrote it. Confirm it against a linked ticket or attribute it. Live on a real bug this agent asserted a report "came from support chat" when nothing was linked and the service desk was unreachable.
 - Never invent a sha, a path, a PR number, a person or a release.
 """
 
@@ -256,6 +269,7 @@ async def get_triage_agent(config: RunnableConfig) -> Pregel:
             git_commits_touching,
             git_commit_diff,
             git_compare,
+            jira_report_provenance,
             find_prior_triage,
             record_triage,
             read_repo_file,
