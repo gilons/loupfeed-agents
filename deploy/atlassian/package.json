@@ -1,0 +1,17 @@
+{
+  "name": "loupfeed-atlassian-app",
+  "description": "The Atlassian entry surface for a loupfeed agents deployment.",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "render": "bin/render-manifest",
+    "lint": "eslint src/**/*"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0"
+  },
+  "dependencies": {
+    "@forge/api": "^8.0.3"
+  }
+}

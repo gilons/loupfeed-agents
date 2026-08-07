@@ -1,0 +1,66 @@
+# Template for the loupfeed Atlassian entry app.
+#
+# Nothing here is specific to any one organisation. `bin/render-manifest`
+# generates the real `manifest.yml` from this file, substituting the one
+# placeholder below with LOUPFEED_DEPLOYMENT_URL: the https origin of YOUR
+# loupfeed-agents deployment, e.g. https://agents.acme.dev
+#
+# Forge requires every egress destination to be declared in the manifest, which
+# is why the deployment URL cannot be a pure runtime setting: each publisher
+# renders and deploys their own copy of the app. The shared secret and the
+# forwarding URL are still read at runtime from app storage, so an installation
+# can be re-pointed without redeploying.
+#
+# `app.id` is deliberately absent: `forge register` writes it, so every
+# publisher gets their own app rather than inheriting somebody else's.
+modules:
+  trigger:
+    - key: loupfeed-jira-events
+      function: main
+      events:
+        - avi:jira:commented:issue
+        - avi:jira:updated:issue
+        - avi:jira:assigned:issue
+    - key: loupfeed-confluence-events
+      function: main
+      events:
+        - avi:confluence:created:comment
+        - avi:confluence:updated:page
+  webtrigger:
+    - key: loupfeed-reply
+      function: reply
+    - key: loupfeed-proxy
+      function: proxy
+    - key: loupfeed-attach
+      function: attach
+  function:
+    - key: main
+      handler: index.run
+    - key: reply
+      handler: index.reply
+    - key: proxy
+      handler: index.proxy
+    - key: attach
+      handler: index.attach
+
+permissions:
+  scopes:
+    - read:jira-work
+    - write:jira-work
+    - read:comment:confluence
+    - read:page:confluence
+    - read:confluence-content.summary
+    - write:comment:confluence
+    - write:page:confluence
+    - write:folder:confluence
+    - write:confluence-file
+    - storage:app
+  external:
+    fetch:
+      backend:
+        - address: ${LOUPFEED_DEPLOYMENT_URL}
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
