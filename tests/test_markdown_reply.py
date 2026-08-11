@@ -135,3 +135,39 @@ def test_storage_code_block_uses_the_code_macro():
     out = markdown_to_storage("```\nrm -rf /\n```")
     assert 'ac:name="code"' in out
     assert "<![CDATA[rm -rf /]]>" in out
+
+
+def test_storage_renders_a_table_with_a_header():
+    md = "| Region | What it holds |\n|---|---|\n| Queue | Every **conversation** |\n"
+    out = markdown_to_storage(md)
+    assert "<table><tbody>" in out
+    assert "<th>Region</th><th>What it holds</th>" in out
+    assert "<td>Queue</td><td>Every <strong>conversation</strong></td>" in out
+    assert "|" not in out
+
+
+def test_adf_renders_a_table_with_a_header():
+    md = "| A | B |\n| --- | --- |\n| 1 | 2 |"
+    doc = markdown_to_adf(md)
+    table = doc["content"][0]
+    assert table["type"] == "table"
+    assert [cell["type"] for cell in table["content"][0]["content"]] == [
+        "tableHeader",
+        "tableHeader",
+    ]
+    assert [cell["type"] for cell in table["content"][1]["content"]] == [
+        "tableCell",
+        "tableCell",
+    ]
+
+
+def test_headerless_table_still_renders_as_rows():
+    out = markdown_to_storage("| a | b |\n| c | d |")
+    assert "<th>" not in out
+    assert out.count("<tr>") == 2
+
+
+def test_a_table_between_paragraphs_keeps_both():
+    out = markdown_to_storage("Before\n\n| A |\n|---|\n| 1 |\n\nAfter")
+    assert out.startswith("<p>Before</p><table>")
+    assert out.endswith("<p>After</p>")

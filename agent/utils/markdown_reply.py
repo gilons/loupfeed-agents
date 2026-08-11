@@ -25,6 +25,8 @@ _ORDERED = re.compile(r"^\s*\d+[.)]\s+(.*)$")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 _RULE = re.compile(r"^\s*([-*_])\1{2,}\s*$")
 _FENCE = re.compile(r"^\s*```\s*([\w+-]*)\s*$")
+_TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
+_TABLE_DIVIDER = re.compile(r"^\s*\|[\s|:-]+\|\s*$")
 
 # Inline spans, longest-delimiter first so ** wins over *.
 _INLINE = re.compile(
@@ -90,6 +92,10 @@ def _inline_nodes(text: str, marks: list[dict[str, Any]] | None = None) -> list[
     return nodes or [node(text)]
 
 
+def _table_cells(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
 def _blocks(markdown: str) -> list[tuple[str, Any]]:
     """Group lines into (kind, payload) blocks: the shared parse for both formats."""
     blocks: list[tuple[str, Any]] = []
@@ -97,11 +103,12 @@ def _blocks(markdown: str) -> list[tuple[str, Any]]:
     paragraph: list[str] = []
     bullets: list[str] = []
     ordered: list[str] = []
+    table: list[str] = []
     fence: list[str] | None = None
     language = ""
 
     def flush() -> None:
-        nonlocal paragraph, bullets, ordered
+        nonlocal paragraph, bullets, ordered, table
         if paragraph:
             blocks.append(("paragraph", " ".join(paragraph)))
             paragraph = []
@@ -111,6 +118,15 @@ def _blocks(markdown: str) -> list[tuple[str, Any]]:
         if ordered:
             blocks.append(("ordered", ordered))
             ordered = []
+        if table:
+            rows = [row for row in table if not _TABLE_DIVIDER.match(row)]
+            header = (
+                _table_cells(rows[0]) if len(table) > 1 and _TABLE_DIVIDER.match(table[1]) else None
+            )
+            body = [_table_cells(row) for row in (rows[1:] if header else rows)]
+            if header or body:
+                blocks.append(("table", (header, body)))
+            table = []
 
     for line in lines:
         fenced = _FENCE.match(line)
@@ -128,6 +144,13 @@ def _blocks(markdown: str) -> list[tuple[str, Any]]:
         if not line.strip():
             flush()
             continue
+        if _TABLE_ROW.match(line):
+            if paragraph or bullets or ordered:
+                flush()
+            table.append(line)
+            continue
+        if table:
+            flush()
         if _RULE.match(line):
             flush()
             blocks.append(("rule", None))
@@ -198,6 +221,44 @@ def markdown_to_adf(markdown: str) -> dict[str, Any]:
             if language:
                 node["attrs"] = {"language": language}
             content.append(node)
+        elif kind == "table":
+            header, body = payload
+            rows: list[dict[str, Any]] = []
+            if header:
+                rows.append(
+                    {
+                        "type": "tableRow",
+                        "content": [
+                            {
+                                "type": "tableHeader",
+                                "attrs": {},
+                                "content": [{"type": "paragraph", "content": _inline_nodes(cell)}],
+                            }
+                            for cell in header
+                        ],
+                    }
+                )
+            for row in body:
+                rows.append(
+                    {
+                        "type": "tableRow",
+                        "content": [
+                            {
+                                "type": "tableCell",
+                                "attrs": {},
+                                "content": [{"type": "paragraph", "content": _inline_nodes(cell)}],
+                            }
+                            for cell in row
+                        ],
+                    }
+                )
+            content.append(
+                {
+                    "type": "table",
+                    "attrs": {"isNumberColumnEnabled": False, "layout": "default"},
+                    "content": rows,
+                }
+            )
         elif kind == "rule":
             content.append({"type": "rule"})
     if not content:
@@ -248,6 +309,16 @@ def markdown_to_storage(markdown: str) -> str:
                 f"<ac:plain-text-body><![CDATA[{text}]]></ac:plain-text-body>"
                 "</ac:structured-macro>"
             )
+        elif kind == "table":
+            header, body = payload
+            rows = []
+            if header:
+                cells = "".join(f"<th>{_storage_inline(cell)}</th>" for cell in header)
+                rows.append(f"<tr>{cells}</tr>")
+            for row in body:
+                cells = "".join(f"<td>{_storage_inline(cell)}</td>" for cell in row)
+                rows.append(f"<tr>{cells}</tr>")
+            parts.append(f"<table><tbody>{''.join(rows)}</tbody></table>")
         elif kind == "rule":
             parts.append("<hr />")
     return "".join(parts) or f"<p>{html.escape(markdown or '')}</p>"
