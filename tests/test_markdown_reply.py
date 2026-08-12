@@ -171,3 +171,29 @@ def test_a_table_between_paragraphs_keeps_both():
     out = markdown_to_storage("Before\n\n| A |\n|---|\n| 1 |\n\nAfter")
     assert out.startswith("<p>Before</p><table>")
     assert out.endswith("<p>After</p>")
+
+
+def test_storage_renders_a_blockquote_without_leaking_markers():
+    out = markdown_to_storage("> Companion to the **PRD**.\n>\n> Verified at `main`.\n\nBody")
+    assert out.startswith("<blockquote><p>Companion to the <strong>PRD</strong>.</p>")
+    assert "<p>Verified at <code>main</code>.</p></blockquote>" in out
+    assert "&gt;" not in out
+    assert out.endswith("<p>Body</p>")
+
+
+def test_adf_blockquote_holds_only_what_adf_allows():
+    doc = markdown_to_adf("> ## Heading in a quote\n> - a bullet\n> plain line")
+    kinds = [node["type"] for node in doc["content"]]
+    assert "blockquote" in kinds
+    quote = doc["content"][kinds.index("blockquote")]
+    assert all(node["type"] in ("paragraph", "bulletList") for node in quote["content"])
+    # The heading is not dropped, it is hoisted out of the quote.
+    assert "heading" in kinds
+
+
+def test_quote_then_table_keeps_both_blocks():
+    out = markdown_to_storage("> note\n\n| A |\n|---|\n| 1 |")
+    assert (
+        out
+        == "<blockquote><p>note</p></blockquote><table><tbody><tr><th>A</th></tr><tr><td>1</td></tr></tbody></table>"
+    )

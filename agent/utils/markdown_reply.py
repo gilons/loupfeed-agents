@@ -27,6 +27,7 @@ _RULE = re.compile(r"^\s*([-*_])\1{2,}\s*$")
 _FENCE = re.compile(r"^\s*```\s*([\w+-]*)\s*$")
 _TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
 _TABLE_DIVIDER = re.compile(r"^\s*\|[\s|:-]+\|\s*$")
+_QUOTE = re.compile(r"^\s*>\s?(.*)$")
 
 # Inline spans, longest-delimiter first so ** wins over *.
 _INLINE = re.compile(
@@ -104,11 +105,12 @@ def _blocks(markdown: str) -> list[tuple[str, Any]]:
     bullets: list[str] = []
     ordered: list[str] = []
     table: list[str] = []
+    quote: list[str] = []
     fence: list[str] | None = None
     language = ""
 
     def flush() -> None:
-        nonlocal paragraph, bullets, ordered, table
+        nonlocal paragraph, bullets, ordered, table, quote
         if paragraph:
             blocks.append(("paragraph", " ".join(paragraph)))
             paragraph = []
@@ -127,6 +129,10 @@ def _blocks(markdown: str) -> list[tuple[str, Any]]:
             if header or body:
                 blocks.append(("table", (header, body)))
             table = []
+        if quote:
+            # Recurse: a quote holds ordinary blocks, one nesting level stripped.
+            blocks.append(("quote", _blocks("\n".join(quote))))
+            quote = []
 
     for line in lines:
         fenced = _FENCE.match(line)
@@ -144,6 +150,14 @@ def _blocks(markdown: str) -> list[tuple[str, Any]]:
         if not line.strip():
             flush()
             continue
+        quoted = _QUOTE.match(line)
+        if quoted:
+            if paragraph or bullets or ordered or table:
+                flush()
+            quote.append(quoted.group(1))
+            continue
+        if quote:
+            flush()
         if _TABLE_ROW.match(line):
             if paragraph or bullets or ordered:
                 flush()
@@ -184,10 +198,13 @@ def _blocks(markdown: str) -> list[tuple[str, Any]]:
     return blocks
 
 
-def markdown_to_adf(markdown: str) -> dict[str, Any]:
-    """An ADF document for a Jira comment."""
+# ADF permits only these inside a blockquote; anything else is hoisted after it.
+_QUOTABLE_ADF = ("paragraph", "bulletList", "orderedList", "codeBlock")
+
+
+def _adf_nodes(blocks: list[tuple[str, Any]]) -> list[dict[str, Any]]:
     content: list[dict[str, Any]] = []
-    for kind, payload in _blocks(markdown):
+    for kind, payload in blocks:
         if kind == "paragraph":
             content.append({"type": "paragraph", "content": _inline_nodes(payload)})
         elif kind == "heading":
@@ -259,8 +276,20 @@ def markdown_to_adf(markdown: str) -> dict[str, Any]:
                     "content": rows,
                 }
             )
+        elif kind == "quote":
+            inner = _adf_nodes(payload)
+            quotable = [node for node in inner if node["type"] in _QUOTABLE_ADF]
+            if quotable:
+                content.append({"type": "blockquote", "content": quotable})
+            content.extend(node for node in inner if node["type"] not in _QUOTABLE_ADF)
         elif kind == "rule":
             content.append({"type": "rule"})
+    return content
+
+
+def markdown_to_adf(markdown: str) -> dict[str, Any]:
+    """An ADF document for a Jira comment."""
+    content = _adf_nodes(_blocks(markdown))
     if not content:
         content = [{"type": "paragraph", "content": [{"type": "text", "text": markdown or ""}]}]
     return {"type": "doc", "version": 1, "content": content}
@@ -288,10 +317,9 @@ def _storage_inline(text: str) -> str:
     return "".join(out) or html.escape(text)
 
 
-def markdown_to_storage(markdown: str) -> str:
-    """Confluence storage format for a footer comment, HTML-escaped."""
+def _storage_parts(blocks: list[tuple[str, Any]]) -> list[str]:
     parts: list[str] = []
-    for kind, payload in _blocks(markdown):
+    for kind, payload in blocks:
         if kind == "paragraph":
             parts.append(f"<p>{_storage_inline(payload)}</p>")
         elif kind == "heading":
@@ -319,6 +347,14 @@ def markdown_to_storage(markdown: str) -> str:
                 cells = "".join(f"<td>{_storage_inline(cell)}</td>" for cell in row)
                 rows.append(f"<tr>{cells}</tr>")
             parts.append(f"<table><tbody>{''.join(rows)}</tbody></table>")
+        elif kind == "quote":
+            parts.append(f"<blockquote>{''.join(_storage_parts(payload))}</blockquote>")
         elif kind == "rule":
             parts.append("<hr />")
+    return parts
+
+
+def markdown_to_storage(markdown: str) -> str:
+    """Confluence storage format for a page or footer comment, HTML-escaped."""
+    parts = _storage_parts(_blocks(markdown))
     return "".join(parts) or f"<p>{html.escape(markdown or '')}</p>"
