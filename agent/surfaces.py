@@ -140,6 +140,24 @@ def jira_project_of(issue_key: str | None) -> str:
     return key.split("-", 1)[0].upper() if "-" in key else key.upper()
 
 
+def surface_for_instance(
+    org: str, project: str, path: str | None = None
+) -> tuple[dict[str, Any], dict[str, str]] | None:
+    """The surface a loupfeed instance belongs to, and which of its instances it is.
+
+    A webhook arrives naming its org and project, not its release, so this is
+    the lookup that turns a delivery into "whose bug board does this go on".
+    Returns the surface with the matching instance entry, because the caller
+    usually wants the instance name too ("production" against "stages") and
+    re-deriving it costs another pass over the registry.
+    """
+    for surface in load_surfaces(path):
+        for target in loupfeed_targets(surface):
+            if target["org"] == org and target["project"] == project:
+                return surface, target
+    return None
+
+
 def surface_for_jira_project(project_key: str, path: str | None = None) -> dict[str, Any] | None:
     wanted = (project_key or "").strip().upper()
     if not wanted:

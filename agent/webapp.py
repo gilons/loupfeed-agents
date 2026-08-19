@@ -20,11 +20,9 @@ from langchain_core.messages.content import create_text_block
 from langgraph_sdk import get_client
 from langgraph_sdk.client import LangGraphClient
 
-from .ci_autofix import handle_ci_failure, handle_review_feedback
 from .atlassian_adapter import router as atlassian_router
+from .ci_autofix import handle_ci_failure, handle_review_feedback
 from .connector_routes import router as connector_router
-from .teams_adapter import router as teams_router
-from .teams_tab import router as teams_tab_router
 from .dashboard import router as dashboard_router
 from .dashboard.agent_overrides import (
     get_profile_default_repo,
@@ -49,6 +47,13 @@ from .dashboard.user_mappings import (
 from .dashboard.user_mappings import (
     refresh_cache as refresh_user_mapping_cache,
 )
+from .loupfeed_bugs import (
+    SIGNATURE_HEADER,
+    TIMESTAMP_HEADER,
+    file_feedback,
+    verify_signature,
+    webhook_secret,
+)
 from .reviewer_findings import (
     REVIEWER_THREAD_KIND,
     Finding,
@@ -63,6 +68,8 @@ from .reviewer_findings import (
 )
 from .reviewer_publish import fetch_pr_review_threads, post_review_started_comment
 from .reviewer_reconcile import reconcile_findings_with_review_threads
+from .teams_adapter import router as teams_router
+from .teams_tab import router as teams_tab_router
 from .utils.auth import (
     is_bot_token_only_mode,
     resolve_github_token_from_email,
@@ -1273,6 +1280,40 @@ def verify_linear_signature(body: bytes, signature: str, secret: str) -> bool:
     expected = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
 
     return hmac.compare_digest(expected, signature)
+
+
+@app.post("/webhooks/loupfeed")
+async def loupfeed_webhook(request: Request) -> dict[str, Any]:
+    """New feedback from a loupfeed instance, filed on the matching bug board.
+
+    Answers 4xx only for a request we can prove is not ours: a bad signature.
+    Everything else that goes wrong answers 5xx so the sender retries, because
+    the sender's retries are the only thing standing between a transient Jira
+    outage and a report nobody ever sees.
+    """
+    body = await request.body()
+    if not verify_signature(
+        body,
+        request.headers.get(TIMESTAMP_HEADER, ""),
+        request.headers.get(SIGNATURE_HEADER, ""),
+        webhook_secret(),
+    ):
+        logger.warning("Rejected a loupfeed delivery with a bad signature")
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
+    try:
+        delivery = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON") from None
+
+    if delivery.get("type") != "feedback.created":
+        return {"status": "ignored", "reason": "unhandled delivery type"}
+
+    try:
+        return file_feedback(delivery)
+    except Exception as exc:  # noqa: BLE001 - the sender retries on a 5xx
+        logger.warning("Filing loupfeed feedback failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Could not file the report") from exc
 
 
 @app.post("/webhooks/linear")
