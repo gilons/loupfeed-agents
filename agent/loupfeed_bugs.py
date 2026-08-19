@@ -122,9 +122,13 @@ def _body_markdown(event: dict[str, Any], instance_name: str, dashboard: str | N
         f"| Environment | {event.get('environment') or instance_name} |",
         f"| On the page | {element.get('text') or element.get('selector') or 'nothing anchored'} |",
         f"| Received | {event.get('receivedAt') or 'unknown'} |",
+        f"| loupfeed thread | `{event.get('threadId') or event.get('eventId')}` |",
     ]
     if dashboard:
-        lines += ["", f"[Open the thread in loupfeed]({dashboard})"]
+        # The dashboard holds the selected thread in component state and has no
+        # URL for one, so this is the instance and the id to look for, not a
+        # deep link. A link that 401s in a browser is worse than none.
+        lines += ["", f"[Open {dashboard}]({dashboard}) and find the thread above."]
     lines += [
         "",
         "_Filed automatically from loupfeed. Further reports on the same element"
@@ -133,9 +137,14 @@ def _body_markdown(event: dict[str, Any], instance_name: str, dashboard: str | N
     return "\n".join(lines)
 
 
-def _dashboard_url(target: dict[str, str], thread_id: str) -> str | None:
-    api = target.get("api")
-    return f"{api}/threads/{quote(thread_id)}" if api else None
+def _dashboard_url(target: dict[str, str]) -> str | None:
+    """The instance's dashboard origin.
+
+    Not a per-thread URL: the dashboard keeps the selected thread in component
+    state, so there is nothing to link to yet. Worth adding there, and then this
+    becomes a deep link without anything here changing shape.
+    """
+    return target.get("api") or None
 
 
 def file_feedback(delivery: dict[str, Any]) -> dict[str, Any]:
@@ -166,7 +175,7 @@ def file_feedback(delivery: dict[str, Any]) -> dict[str, Any]:
 
     label = _label_for(thread_id)
     existing = _find_existing(project_key, label)
-    dashboard = _dashboard_url(target, thread_id)
+    dashboard = _dashboard_url(target)
 
     if existing:
         body = {
