@@ -36,6 +36,8 @@ TMP=$(mktemp)
   echo "LOUPFEED_DASHBOARD_TOKEN=$(get LOUPFEED_DASHBOARD_TOKEN)"
   echo "LOUPFEED_DASHBOARD_TOKEN_PROD=$(get LOUPFEED_DASHBOARD_TOKEN_PROD)"
   echo "LOUPFEED_DASHBOARD_TOKEN_DEV=$(get LOUPFEED_DASHBOARD_TOKEN_DEV)"
+  echo "# Shared with every loupfeed instance that forwards new feedback here."
+  echo "LOUPFEED_WEBHOOK_SECRET=$(get LOUPFEED_WEBHOOK_SECRET)"
   echo "# --- MCP connectors (optional; pm graph) ---"
   echo "ATLASSIAN_EMAIL=$(get ATLASSIAN_EMAIL)"
   echo "ATLASSIAN_API_TOKEN=$(get ATLASSIAN_API_TOKEN)"
